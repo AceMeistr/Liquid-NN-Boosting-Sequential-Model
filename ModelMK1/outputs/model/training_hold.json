@@ -1,0 +1,5 @@
+{
+  "status": "on_hold",
+  "reason": "build_only_requested",
+  "action": "Place real dataset in Training Data or pass --data-path to start Optuna + training."
+}

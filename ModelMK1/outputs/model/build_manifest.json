@@ -1,0 +1,6 @@
+{
+  "phase": "models_built_training_on_hold",
+  "lnn_init_checkpoint": "/workspaces/Liquid-NN-XGboost-Sequential-Model/ModelMK1/outputs/model/lnn_init.pt",
+  "xgb_template": "/workspaces/Liquid-NN-XGboost-Sequential-Model/ModelMK1/outputs/model/xgb_template.json",
+  "requires_real_data": true
+}
