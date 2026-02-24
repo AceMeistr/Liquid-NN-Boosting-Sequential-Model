@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import logging
 
 import numpy as np
 import pandas as pd
@@ -8,6 +9,9 @@ import torch
 from torch.utils.data import Dataset
 
 from modelmk1.features.indicators import add_all_indicators
+
+
+logger = logging.getLogger(__name__)
 
 
 REQUIRED_COLUMNS = {"timestamp", "price", "high", "low", "volume"}
@@ -42,8 +46,18 @@ def load_tick_df(path: str) -> pd.DataFrame:
 
     df = source.copy()
     df["timestamp"] = pd.to_datetime(df["timestamp"], utc=False, errors="coerce")
+    for column in ["price", "high", "low", "volume"]:
+        df[column] = pd.to_numeric(df[column], errors="coerce")
+
+    start_rows = len(df)
     df = df.dropna(subset=["timestamp", "price", "high", "low", "volume"])
+    df = df[(df["price"] > 0) & (df["high"] > 0) & (df["low"] > 0) & (df["volume"] >= 0)]
+    df = df[df["high"] >= df["low"]]
     df = df.sort_values("timestamp").drop_duplicates(subset=["timestamp"]).reset_index(drop=True)
+
+    dropped = start_rows - len(df)
+    if dropped > 0:
+        logger.info("Dropped %s invalid rows during tick-data validation", dropped)
 
     if df.empty:
         raise ValueError("Dataset is empty after cleaning.")
@@ -70,11 +84,21 @@ def _compute_target_signed_range(price: np.ndarray, horizon: int) -> np.ndarray:
 
 
 def build_supervised_data(df: pd.DataFrame, seq_len: int, horizon: int, include_stoch_rsi: bool = True) -> DataBundle:
+    if seq_len <= 0:
+        raise ValueError("seq_len must be > 0")
+    if horizon <= 0:
+        raise ValueError("horizon must be > 0")
+
     feat_df = add_all_indicators(df, include_stoch_rsi=include_stoch_rsi)
     feat_df["target"] = _compute_target_signed_range(feat_df["price"].to_numpy(), horizon=horizon)
     feat_df = feat_df.dropna().reset_index(drop=True)
 
+    if len(feat_df) <= seq_len:
+        raise ValueError("Not enough rows after feature engineering for selected seq_len/horizon.")
+
     feature_columns = [col for col in feat_df.columns if col not in {"timestamp", "target"}]
+    if not feature_columns:
+        raise ValueError("No feature columns available after preprocessing.")
     x_values = feat_df[feature_columns].to_numpy(dtype=np.float32)
     y_values = feat_df["target"].to_numpy(dtype=np.float32)
 

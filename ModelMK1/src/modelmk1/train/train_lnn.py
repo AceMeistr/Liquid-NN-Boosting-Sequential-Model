@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 
 import joblib
 import numpy as np
@@ -14,6 +15,9 @@ from modelmk1.common.paths import get_app_paths, resolve_data_file
 from modelmk1.common.runtime import pick_device, set_seed, write_json
 from modelmk1.data.loader import TickDataset, build_supervised_data, load_tick_df, resample_ticks
 from modelmk1.models.lnn_model import MarketLNN
+
+
+logger = logging.getLogger(__name__)
 
 
 def _train_epoch(
@@ -120,7 +124,16 @@ def run_training(args: argparse.Namespace) -> dict:
         else:
             patience += 1
 
-        print(f"Epoch {epoch}/{args.epochs} | train={train_loss:.6f} | val={val_loss:.6f} | device={device.type}")
+        logger.info(
+            "Epoch %s/%s | train=%.6f | val=%.6f | device=%s",
+            epoch,
+            args.epochs,
+            train_loss,
+            val_loss,
+            device.type,
+        )
+        if device.type == "cuda":
+            torch.cuda.empty_cache()
         if patience >= args.early_stopping_patience:
             break
 

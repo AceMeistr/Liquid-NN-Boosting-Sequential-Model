@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+import logging
+
 import numpy as np
 import pandas as pd
+
+
+logger = logging.getLogger(__name__)
 
 
 def sma(series: pd.Series, window: int) -> pd.Series:
@@ -59,8 +64,38 @@ def stoch_rsi(series: pd.Series, window: int = 14, smooth_k: int = 3, smooth_d: 
     return pd.DataFrame({"stoch_rsi": stoch, "stoch_rsi_k": stoch_k, "stoch_rsi_d": stoch_d})
 
 
+def get_feature_schema(include_stoch_rsi: bool = True) -> list[str]:
+    base = [
+        "price",
+        "high",
+        "low",
+        "volume",
+        "sma_14",
+        "sma_50",
+        "ema_12",
+        "ema_26",
+        "rsi_14",
+        "macd",
+        "macd_signal",
+        "macd_hist",
+        "atr_14",
+        "bb_mid",
+        "bb_upper",
+        "bb_lower",
+        "bb_width",
+        "ret_1",
+        "ret_5",
+        "ret_20",
+        "vol_z_20",
+    ]
+    if include_stoch_rsi:
+        return [*base, "stoch_rsi", "stoch_rsi_k", "stoch_rsi_d"]
+    return base
+
+
 def add_all_indicators(df: pd.DataFrame, include_stoch_rsi: bool = True) -> pd.DataFrame:
     out = df.copy()
+    start_rows = len(out)
     out["sma_14"] = sma(out["price"], 14)
     out["sma_50"] = sma(out["price"], 50)
     out["ema_12"] = ema(out["price"], 12)
@@ -88,4 +123,7 @@ def add_all_indicators(df: pd.DataFrame, include_stoch_rsi: bool = True) -> pd.D
 
     out = out.replace([np.inf, -np.inf], np.nan)
     out = out.dropna().reset_index(drop=True)
+    dropped = start_rows - len(out)
+    if dropped > 0:
+        logger.info("Dropped %s rows after indicator construction due to NaN/Inf", dropped)
     return out

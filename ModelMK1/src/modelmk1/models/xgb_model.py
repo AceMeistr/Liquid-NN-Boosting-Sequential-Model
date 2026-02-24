@@ -12,6 +12,7 @@ def train_xgb(
     x_val: np.ndarray,
     y_val: np.ndarray,
     params: dict | None = None,
+    use_gpu: bool = False,
 ) -> xgb.XGBRegressor:
     defaults = {
         "n_estimators": 600,
@@ -28,6 +29,9 @@ def train_xgb(
     }
     if params:
         defaults.update(params)
+
+    if use_gpu:
+        defaults.update({"tree_method": "hist", "device": "cuda"})
 
     model = xgb.XGBRegressor(**defaults)
     model.fit(x_train, y_train, eval_set=[(x_val, y_val)], verbose=False)

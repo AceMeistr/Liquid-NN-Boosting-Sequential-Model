@@ -13,7 +13,7 @@ from modelmk1.tuning.optuna_lnn import run_optuna
 
 
 def run_pipeline(data_path: str | None, trials: int, build_only: bool) -> dict:
-    run_build(input_size=24, hidden_size=128, dropout=0.15, seq_len=64, horizon=15, resample_freq="1min")
+    run_build(input_size=None, hidden_size=128, dropout=0.15, seq_len=64, horizon=15, resample_freq="1min")
 
     if build_only:
         payload = {

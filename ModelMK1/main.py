@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 from pathlib import Path
 
@@ -12,6 +13,11 @@ if str(SRC) not in sys.path:
 
 
 def main() -> None:
+    from modelmk1.common.runtime import configure_logging
+
+    configure_logging()
+    logger = logging.getLogger(__name__)
+
     parser = argparse.ArgumentParser(description="ModelMK1 launcher")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -38,39 +44,43 @@ def main() -> None:
     subparsers.add_parser("backtest", help="Run backtest on predictions")
     args = parser.parse_args()
 
-    if args.command == "build":
-        from modelmk1.train.build_models import run_build
+    try:
+        if args.command == "build":
+            from modelmk1.train.build_models import run_build
 
-        print(run_build(24, 128, 0.15, 64, 15, "1min"))
-    elif args.command == "pipeline":
-        from modelmk1.train.train_pipeline import run_pipeline
+            print(run_build(None, 128, 0.15, 64, 15, "1min"))
+        elif args.command == "pipeline":
+            from modelmk1.train.train_pipeline import run_pipeline
 
-        print(run_pipeline(args.data_path, args.trials, args.build_only))
-    elif args.command == "train-lnn":
-        from modelmk1.train.train_lnn import build_parser, run_training
+            print(run_pipeline(args.data_path, args.trials, args.build_only))
+        elif args.command == "train-lnn":
+            from modelmk1.train.train_lnn import build_parser, run_training
 
-        lnn_args = build_parser().parse_args([])
-        lnn_args.data_path = args.data_path
-        print(run_training(lnn_args))
-    elif args.command == "tune":
-        from modelmk1.tuning.optuna_lnn import run_optuna
+            lnn_args = build_parser().parse_args([])
+            lnn_args.data_path = args.data_path
+            print(run_training(lnn_args))
+        elif args.command == "tune":
+            from modelmk1.tuning.optuna_lnn import run_optuna
 
-        print(run_optuna(args.trials, 0, args.data_path, "modelmk1_lnn_optuna"))
-    elif args.command == "train-hybrid":
-        from modelmk1.train.train_hybrid import build_parser, run_hybrid_training
+            print(run_optuna(args.trials, 0, args.data_path, "modelmk1_lnn_optuna"))
+        elif args.command == "train-hybrid":
+            from modelmk1.train.train_hybrid import build_parser, run_hybrid_training
 
-        hybrid_args = build_parser().parse_args([])
-        hybrid_args.data_path = args.data_path
-        print(run_hybrid_training(hybrid_args))
-    elif args.command == "predict":
-        from modelmk1.predict.predict import main as predict_main
+            hybrid_args = build_parser().parse_args([])
+            hybrid_args.data_path = args.data_path
+            print(run_hybrid_training(hybrid_args))
+        elif args.command == "predict":
+            from modelmk1.predict.predict import main as predict_main
 
-        sys.argv = ["predict.py"] + (["--data-path", args.data_path] if args.data_path else [])
-        predict_main()
-    elif args.command == "backtest":
-        from modelmk1.eval.backtest import main as backtest_main
+            sys.argv = ["predict.py"] + (["--data-path", args.data_path] if args.data_path else [])
+            predict_main()
+        elif args.command == "backtest":
+            from modelmk1.eval.backtest import main as backtest_main
 
-        backtest_main()
+            backtest_main()
+    except Exception:
+        logger.exception("Command failed: %s", args.command)
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

@@ -8,7 +8,7 @@ import torch
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
 from modelmk1.common.paths import get_app_paths, resolve_data_file
-from modelmk1.common.runtime import pick_device, write_json
+from modelmk1.common.runtime import pick_device, safe_torch_load, write_json
 from modelmk1.data.loader import build_supervised_data, load_tick_df, resample_ticks
 from modelmk1.models.lnn_model import MarketLNN
 from modelmk1.models.xgb_model import save_xgb, train_xgb
@@ -36,7 +36,7 @@ def run_hybrid_training(args: argparse.Namespace) -> dict:
     y_train, y_val = bundle.targets[:split], bundle.targets[split:]
 
     device = pick_device(force_cpu=args.cpu)
-    checkpoint = torch.load(model_dir / "lnn_best.pt", map_location=device)
+    checkpoint = safe_torch_load(model_dir / "lnn_best.pt", map_location=device)
     scaler = joblib.load(model_dir / "lnn_scaler.joblib")
 
     x_seq_train_scaled = scaler.transform(x_seq_train.reshape(-1, x_seq_train.shape[-1])).reshape(x_seq_train.shape)
@@ -57,7 +57,13 @@ def run_hybrid_training(args: argparse.Namespace) -> dict:
 
     residual_train = y_train - lnn_train_pred
     residual_val = y_val - lnn_val_pred
-    xgb = train_xgb(x_xgb_train_scaled, residual_train, x_xgb_val_scaled, residual_val)
+    xgb = train_xgb(
+        x_xgb_train_scaled,
+        residual_train,
+        x_xgb_val_scaled,
+        residual_val,
+        use_gpu=(device.type == "cuda"),
+    )
 
     residual_pred = xgb.predict(x_xgb_val_scaled)
     hybrid_pred = lnn_val_pred + residual_pred

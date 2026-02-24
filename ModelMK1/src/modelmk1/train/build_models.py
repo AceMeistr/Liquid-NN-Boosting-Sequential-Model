@@ -5,20 +5,30 @@ import torch
 
 from modelmk1.common.paths import get_app_paths
 from modelmk1.common.runtime import write_json
+from modelmk1.features.indicators import get_feature_schema
 from modelmk1.models.lnn_model import MarketLNN
 
 
-def run_build(input_size: int, hidden_size: int, dropout: float, seq_len: int, horizon: int, resample_freq: str) -> dict:
+def run_build(
+    input_size: int | None,
+    hidden_size: int,
+    dropout: float,
+    seq_len: int,
+    horizon: int,
+    resample_freq: str,
+) -> dict:
     paths = get_app_paths()
     model_dir = paths.outputs / "model"
     model_dir.mkdir(parents=True, exist_ok=True)
 
-    model = MarketLNN(input_size=input_size, hidden_size=hidden_size, output_size=1, dropout=dropout)
+    resolved_input_size = input_size if input_size is not None else len(get_feature_schema(include_stoch_rsi=True))
+
+    model = MarketLNN(input_size=resolved_input_size, hidden_size=hidden_size, output_size=1, dropout=dropout)
     init_path = model_dir / "lnn_init.pt"
     torch.save(
         {
             "model_state_dict": model.state_dict(),
-            "input_size": input_size,
+            "input_size": resolved_input_size,
             "hidden_size": hidden_size,
             "dropout": dropout,
             "seq_len": seq_len,
@@ -57,7 +67,7 @@ def run_build(input_size: int, hidden_size: int, dropout: float, seq_len: int, h
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build untrained ModelMK1 artifacts")
-    parser.add_argument("--input-size", type=int, default=24)
+    parser.add_argument("--input-size", type=int, default=None)
     parser.add_argument("--hidden-size", type=int, default=128)
     parser.add_argument("--dropout", type=float, default=0.15)
     parser.add_argument("--seq-len", type=int, default=64)

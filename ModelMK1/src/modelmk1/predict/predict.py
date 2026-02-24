@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from pathlib import Path
 
 import joblib
 import numpy as np
@@ -9,7 +10,7 @@ import pandas as pd
 import torch
 
 from modelmk1.common.paths import get_app_paths, resolve_data_file
-from modelmk1.common.runtime import pick_device
+from modelmk1.common.runtime import pick_device, safe_torch_load
 from modelmk1.data.loader import build_supervised_data, load_tick_df, resample_ticks
 from modelmk1.models.lnn_model import MarketLNN
 from modelmk1.models.xgb_model import load_xgb
@@ -34,7 +35,7 @@ def main() -> None:
     manifest = json.loads((model_dir / "hybrid_manifest.json").read_text(encoding="utf-8"))
 
     device = pick_device(force_cpu=args.cpu)
-    checkpoint = torch.load(manifest["lnn_checkpoint"], map_location=device)
+    checkpoint = safe_torch_load(Path(manifest["lnn_checkpoint"]), map_location=device)
     scaler = joblib.load(manifest["lnn_scaler"])
     xgb = load_xgb(manifest["xgb_model"])
 
