@@ -28,6 +28,8 @@ Standalone Liquid NN + XGBoost hybrid for market range prediction.
 ## Commands
 
 ```bash
+Route J (Dynamic Correlation Graph + T-GCN):
+
 cd ModelMK1
 /bin/python3 main.py build
 /bin/python3 main.py pipeline --build-only
@@ -47,6 +49,35 @@ cd ModelMK1
 /bin/python3 main.py pipeline --data-path "./Training Data/sensex_ticks.parquet" --trials 30
 ```
 
+<<<<<<< HEAD
+=======
+Route J (Dynamic Correlation Graph + T-GCN):
+
+```bash
+cd ModelMK1
+/bin/python3 main.py train-graph --data-path "./Training Data/sensex_constituents"
+```
+
+Route-J data sources supported:
+
+- Directory of files (one file per constituent) with `timestamp` and a price-like column (`price`, `close`, `idx_close`, `last`, or `ltp`)
+- Single long-format file with columns `timestamp`, `ticker`, and price-like column
+- Single wide-format file with `timestamp` plus one column per constituent
+
+XGBoost spectral route (top-10 constituent 10x10 correlation matrix + eigenvalue features):
+
+```bash
+cd ModelMK1
+/bin/python3 main.py train-xgb-spectral --data-path "./Training Data/sensex_constituents" --top-n 10 --corr-window 60
+```
+
+Spectral route outputs are saved to `outputs/model/`:
+
+- `sensex_top10_correlation_matrix.csv`
+- `xgb_spectral_top10.json`
+- `xgb_spectral_metrics.json`
+
+>>>>>>> main
 Prediction and evaluation:
 
 ```bash

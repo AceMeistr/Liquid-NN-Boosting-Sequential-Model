@@ -1,0 +1,5 @@
+{
+  "extraPaths": ["ModelMK1/src"],
+  "pythonVersion": "3.13",
+  "typeCheckingMode": "basic"
+}
