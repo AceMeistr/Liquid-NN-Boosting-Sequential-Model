@@ -1,0 +1,34 @@
+# Core data science
+numpy>=1.24
+pandas>=2.1
+pyarrow>=12.0
+
+# Machine learning
+torch>=2.1.0
+ncps>=0.2.0
+xgboost>=1.7.6
+optuna>=3.0.0
+scikit-learn>=1.2
+
+# Feature engineering & explainability
+ta>=0.11.0
+shap>=0.42.1
+
+# Utilities & plotting
+tqdm>=4.65
+matplotlib>=3.7
+seaborn>=0.12
+joblib>=1.3
+pytest>=8.0
+
+# Configuration
+pyyaml>=6.0
+
+# Model export / inference runtimes
+onnx>=1.15
+onnxruntime>=1.15
+
+# Notes:
+# - Pin versions further if you require deterministic environments.
+# - Some packages (torch, onnxruntime) may need OS/GPU-specific wheels.
+# - ncps is optional; the model falls back to GRU if unavailable.
