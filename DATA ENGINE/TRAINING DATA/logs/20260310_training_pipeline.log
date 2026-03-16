@@ -1,0 +1,375 @@
+2026-03-10 02:27:12.909 | INFO     | __main__:186 | 
+2026-03-10 02:27:12.909 | INFO     | __main__:187 |   DATA ENGINE — TRAINING PIPELINE
+2026-03-10 02:27:12.909 | INFO     | __main__:188 |   Source  :  C:\Users\sasan\.gemini\antigravity\scratch\upstox_historical_data\DAT
+2026-03-10 02:27:12.910 | INFO     | __main__:189 |   Output  :  C:\Users\sasan\Downloads\DATA ENGINE\TRAINING DATA
+2026-03-10 02:27:12.910 | INFO     | __main__:190 |   Range   :  2022-01-01 → 2026-03-10
+2026-03-10 02:27:12.910 | INFO     | __main__:191 | 
+2026-03-10 02:27:12.946 | INFO     | __main__:197 | Trading days in range: 1034
+2026-03-10 02:27:12.947 | INFO     | __main__:87 | =======================================================
+2026-03-10 02:27:12.947 | INFO     | __main__:88 | STEP 1  — Converting DAT/ 1m CSVs  →  TRAINING DATA/raw/
+2026-03-10 02:27:12.947 | INFO     | __main__:89 | =======================================================
+2026-03-10 02:27:12.948 | INFO     | dat_connector:82 | Converting sensex_index_1m.csv …
+2026-03-10 02:27:14.568 | INFO     | dat_connector:78 |   → written sensex_index_1m.parquet  (11.6 MB, 355,944 rows)
+2026-03-10 02:27:14.603 | INFO     | dat_connector:82 | Converting india_vix_1m.csv …
+2026-03-10 02:27:16.083 | INFO     | dat_connector:78 |   → written india_vix_1m.parquet  (4.5 MB, 355,637 rows)
+2026-03-10 02:27:16.119 | INFO     | dat_connector:82 | Converting sensex_options_weekly_1m.csv …
+2026-03-10 02:27:22.215 | INFO     | dat_connector:78 |   → written options_weekly_1m.parquet  (24.9 MB, 1,453,353 rows)
+2026-03-10 02:27:22.278 | INFO     | dat_connector:82 | Converting constituent_BAJFINANCE_1m.csv …
+2026-03-10 02:27:23.951 | INFO     | dat_connector:78 |   → written BAJFINANCE_1m.parquet  (5.7 MB, 355,461 rows)
+2026-03-10 02:27:23.985 | INFO     | dat_connector:82 | Converting constituent_BHARTIARTL_1m.csv …
+2026-03-10 02:27:25.556 | INFO     | dat_connector:78 |   → written BHARTIARTL_1m.parquet  (6.0 MB, 355,824 rows)
+2026-03-10 02:27:25.596 | INFO     | dat_connector:82 | Converting constituent_HDFCBANK_1m.csv …
+2026-03-10 02:27:27.116 | INFO     | dat_connector:78 |   → written HDFCBANK_1m.parquet  (5.7 MB, 355,835 rows)
+2026-03-10 02:27:27.152 | INFO     | dat_connector:82 | Converting constituent_ICICIBANK_1m.csv …
+2026-03-10 02:27:28.674 | INFO     | dat_connector:78 |   → written ICICIBANK_1m.parquet  (5.9 MB, 355,838 rows)
+2026-03-10 02:27:28.711 | INFO     | dat_connector:82 | Converting constituent_INFY_1m.csv …
+2026-03-10 02:27:30.254 | INFO     | dat_connector:78 |   → written INFY_1m.parquet  (6.3 MB, 355,835 rows)
+2026-03-10 02:27:30.289 | INFO     | dat_connector:82 | Converting constituent_ITC_1m.csv …
+2026-03-10 02:27:31.813 | INFO     | dat_connector:78 |   → written ITC_1m.parquet  (5.5 MB, 355,810 rows)
+2026-03-10 02:27:31.852 | INFO     | dat_connector:82 | Converting constituent_LT_1m.csv …
+2026-03-10 02:27:33.420 | INFO     | dat_connector:78 |   → written LT_1m.parquet  (6.7 MB, 355,835 rows)
+2026-03-10 02:27:33.455 | INFO     | dat_connector:82 | Converting constituent_RELIANCE_1m.csv …
+2026-03-10 02:27:34.977 | INFO     | dat_connector:78 |   → written RELIANCE_1m.parquet  (6.1 MB, 355,792 rows)
+2026-03-10 02:27:35.013 | INFO     | dat_connector:82 | Converting constituent_SBIN_1m.csv …
+2026-03-10 02:27:36.546 | INFO     | dat_connector:78 |   → written SBIN_1m.parquet  (5.8 MB, 355,838 rows)
+2026-03-10 02:27:36.581 | INFO     | dat_connector:82 | Converting constituent_TCS_1m.csv …
+2026-03-10 02:27:38.094 | INFO     | dat_connector:78 |   → written TCS_1m.parquet  (6.9 MB, 355,837 rows)
+2026-03-10 02:27:38.128 | SUCCESS  | __main__:96 | STEP 1 complete.
+2026-03-10 02:27:38.161 | INFO     | __main__:105 | =======================================================
+2026-03-10 02:27:38.161 | INFO     | __main__:106 | STEP 2  — Preprocessing  (1034 trading days)
+2026-03-10 02:27:38.161 | INFO     | __main__:107 | =======================================================
+2026-03-10 02:32:35.148 | INFO     | __main__:323 | 
+2026-03-10 02:32:35.149 | INFO     | __main__:324 |   DATA ENGINE — TRAINING PIPELINE
+2026-03-10 02:32:35.149 | INFO     | __main__:325 |   Source  :  C:\Users\sasan\.gemini\antigravity\scratch\upstox_historical_data\DAT
+2026-03-10 02:32:35.149 | INFO     | __main__:326 |   Output  :  C:\Users\sasan\Downloads\DATA ENGINE\TRAINING DATA
+2026-03-10 02:32:35.150 | INFO     | __main__:327 |   Range   :  2022-01-01 → 2026-03-10
+2026-03-10 02:32:35.150 | INFO     | __main__:328 | 
+2026-03-10 02:32:35.213 | INFO     | __main__:334 | Trading days in range: 1034
+2026-03-10 02:32:35.213 | INFO     | __main__:151 | =======================================================
+2026-03-10 02:32:35.214 | INFO     | __main__:152 | STEP 1  — Building per-day raw Parquet files
+2026-03-10 02:32:35.214 | INFO     | __main__:153 |           Source: C:\Users\sasan\.gemini\antigravity\scratch\upstox_historical_data\DAT
+2026-03-10 02:32:35.214 | INFO     | __main__:154 |           Target: C:\Users\sasan\Downloads\DATA ENGINE\TRAINING DATA\raw
+2026-03-10 02:32:35.214 | INFO     | __main__:155 | =======================================================
+2026-03-10 02:32:35.215 | INFO     | __main__:164 | Loading all symbol CSVs into memory …
+2026-03-10 02:47:32.886 | INFO     | __main__:324 | 
+2026-03-10 02:47:32.886 | INFO     | __main__:325 |   DATA ENGINE — TRAINING PIPELINE
+2026-03-10 02:47:32.886 | INFO     | __main__:326 |   Source  :  C:\Users\sasan\.gemini\antigravity\scratch\upstox_historical_data\DAT
+2026-03-10 02:47:32.887 | INFO     | __main__:327 |   Output  :  C:\Users\sasan\Downloads\DATA ENGINE\TRAINING DATA
+2026-03-10 02:47:32.887 | INFO     | __main__:328 |   Range   :  2022-01-01 → 2026-03-10
+2026-03-10 02:47:32.887 | INFO     | __main__:329 | 
+2026-03-10 02:47:32.917 | INFO     | __main__:335 | Trading days in range: 1034
+2026-03-10 02:47:32.917 | INFO     | __main__:152 | =======================================================
+2026-03-10 02:47:32.918 | INFO     | __main__:153 | STEP 1  — Building per-day raw Parquet files
+2026-03-10 02:47:32.918 | INFO     | __main__:154 |           Source: C:\Users\sasan\.gemini\antigravity\scratch\upstox_historical_data\DAT
+2026-03-10 02:47:32.918 | INFO     | __main__:155 |           Target: C:\Users\sasan\Downloads\DATA ENGINE\TRAINING DATA\raw
+2026-03-10 02:47:32.918 | INFO     | __main__:156 | =======================================================
+2026-03-10 02:47:32.919 | INFO     | __main__:165 | Loading all symbol CSVs into memory …
+2026-03-10 02:47:34.370 | INFO     | __main__:181 |   idx            355,944 rows  loaded.
+2026-03-10 02:47:35.830 | INFO     | __main__:181 |   vix            355,637 rows  loaded.
+2026-03-10 02:47:37.291 | INFO     | __main__:181 |   BAJFINANCE     355,461 rows  loaded.
+2026-03-10 02:47:38.766 | INFO     | __main__:181 |   BHARTIARTL     355,824 rows  loaded.
+2026-03-10 02:47:40.234 | INFO     | __main__:181 |   HDFCBANK       355,835 rows  loaded.
+2026-03-10 02:47:41.704 | INFO     | __main__:181 |   ICICIBANK      355,838 rows  loaded.
+2026-03-10 02:47:43.185 | INFO     | __main__:181 |   INFY           355,835 rows  loaded.
+2026-03-10 02:47:44.776 | INFO     | __main__:181 |   ITC            355,810 rows  loaded.
+2026-03-10 02:47:46.331 | INFO     | __main__:181 |   LT             355,835 rows  loaded.
+2026-03-10 02:47:47.889 | INFO     | __main__:181 |   RELIANCE       355,792 rows  loaded.
+2026-03-10 02:47:49.432 | INFO     | __main__:181 |   SBIN           355,838 rows  loaded.
+2026-03-10 02:47:50.987 | INFO     | __main__:181 |   TCS            355,837 rows  loaded.
+2026-03-10 02:48:00.902 | INFO     | __main__:194 | Building 954 per-day master Parquet files …
+2026-03-10 02:48:58.654 | INFO     | __main__:328 | 
+2026-03-10 02:48:58.655 | INFO     | __main__:329 |   DATA ENGINE — TRAINING PIPELINE
+2026-03-10 02:48:58.655 | INFO     | __main__:330 |   Source  :  C:\Users\sasan\.gemini\antigravity\scratch\upstox_historical_data\DAT
+2026-03-10 02:48:58.655 | INFO     | __main__:331 |   Output  :  C:\Users\sasan\Downloads\DATA ENGINE\TRAINING DATA
+2026-03-10 02:48:58.655 | INFO     | __main__:332 |   Range   :  2022-01-01 → 2026-03-10
+2026-03-10 02:48:58.656 | INFO     | __main__:333 | 
+2026-03-10 02:48:58.691 | INFO     | __main__:339 | Trading days in range: 1034
+2026-03-10 02:48:58.691 | INFO     | __main__:152 | =======================================================
+2026-03-10 02:48:58.691 | INFO     | __main__:153 | STEP 1  — Building per-day raw Parquet files
+2026-03-10 02:48:58.692 | INFO     | __main__:154 |           Source: C:\Users\sasan\.gemini\antigravity\scratch\upstox_historical_data\DAT
+2026-03-10 02:48:58.692 | INFO     | __main__:155 |           Target: C:\Users\sasan\Downloads\DATA ENGINE\TRAINING DATA\raw
+2026-03-10 02:48:58.692 | INFO     | __main__:156 | =======================================================
+2026-03-10 02:48:58.693 | INFO     | __main__:165 | Loading all symbol CSVs into memory …
+2026-03-10 02:49:01.454 | INFO     | __main__:181 |   idx            355,944 rows  loaded.
+2026-03-10 02:49:05.881 | INFO     | __main__:181 |   vix            355,637 rows  loaded.
+2026-03-10 02:49:10.313 | INFO     | __main__:181 |   BAJFINANCE     355,461 rows  loaded.
+2026-03-10 02:49:14.665 | INFO     | __main__:181 |   BHARTIARTL     355,824 rows  loaded.
+2026-03-10 02:49:18.973 | INFO     | __main__:181 |   HDFCBANK       355,835 rows  loaded.
+2026-03-10 02:49:23.328 | INFO     | __main__:181 |   ICICIBANK      355,838 rows  loaded.
+2026-03-10 02:49:27.892 | INFO     | __main__:181 |   INFY           355,835 rows  loaded.
+2026-03-10 02:49:31.176 | INFO     | __main__:181 |   ITC            355,810 rows  loaded.
+2026-03-10 02:49:32.836 | INFO     | __main__:181 |   LT             355,835 rows  loaded.
+2026-03-10 02:49:34.385 | INFO     | __main__:181 |   RELIANCE       355,792 rows  loaded.
+2026-03-10 02:49:35.858 | INFO     | __main__:181 |   SBIN           355,838 rows  loaded.
+2026-03-10 02:49:37.351 | INFO     | __main__:181 |   TCS            355,837 rows  loaded.
+2026-03-10 02:49:47.318 | INFO     | __main__:194 | Building 954 per-day master Parquet files …
+2026-03-10 02:49:55.341 | INFO     | __main__:231 |   Written 50/954 days …
+2026-03-10 02:50:23.364 | INFO     | __main__:362 | 
+2026-03-10 02:50:23.365 | INFO     | __main__:363 |   DATA ENGINE — TRAINING PIPELINE
+2026-03-10 02:50:23.365 | INFO     | __main__:364 |   Source  :  C:\Users\sasan\.gemini\antigravity\scratch\upstox_historical_data\DAT
+2026-03-10 02:50:23.365 | INFO     | __main__:365 |   Output  :  C:\Users\sasan\Downloads\DATA ENGINE\TRAINING DATA
+2026-03-10 02:50:23.365 | INFO     | __main__:366 |   Range   :  2022-01-01 → 2026-03-10
+2026-03-10 02:50:23.366 | INFO     | __main__:367 | 
+2026-03-10 02:50:23.396 | INFO     | __main__:373 | Trading days in range: 1034
+2026-03-10 02:50:23.396 | INFO     | __main__:183 | =======================================================
+2026-03-10 02:50:23.397 | INFO     | __main__:184 | STEP 1  — Building per-day raw Parquet files (Streaming)
+2026-03-10 02:50:23.397 | INFO     | __main__:185 |           Source: C:\Users\sasan\.gemini\antigravity\scratch\upstox_historical_data\DAT
+2026-03-10 02:50:23.397 | INFO     | __main__:186 |           Target: C:\Users\sasan\Downloads\DATA ENGINE\TRAINING DATA\raw
+2026-03-10 02:50:23.397 | INFO     | __main__:187 | =======================================================
+2026-03-10 02:50:23.398 | INFO     | __main__:201 | Scanning index CSV to build target date list …
+2026-03-10 02:50:23.681 | INFO     | __main__:217 | Found 954 trading days to process.
+2026-03-10 02:50:23.683 | INFO     | __main__:228 |   Skipped 50 existing days …
+2026-03-10 02:50:31.213 | INFO     | __main__:235 |   Written 20/954 days …
+2026-03-10 02:50:35.347 | INFO     | __main__:270 |   Written 10/954 days … (latest: 2022-05-24)
+2026-03-10 02:50:48.528 | INFO     | __main__:270 |   Written 20/954 days … (latest: 2022-06-07)
+2026-03-10 02:50:59.981 | INFO     | __main__:270 |   Written 30/954 days … (latest: 2022-06-21)
+2026-03-10 02:51:12.340 | INFO     | __main__:270 |   Written 40/954 days … (latest: 2022-07-05)
+2026-03-10 02:51:19.355 | INFO     | __main__:235 |   Written 40/954 days …
+2026-03-10 02:51:24.792 | INFO     | __main__:270 |   Written 50/954 days … (latest: 2022-07-19)
+2026-03-10 02:51:37.526 | INFO     | __main__:270 |   Written 60/954 days … (latest: 2022-08-02)
+2026-03-10 02:51:48.720 | INFO     | __main__:231 |   Written 100/954 days …
+2026-03-10 02:51:53.038 | INFO     | __main__:270 |   Written 70/954 days … (latest: 2022-08-17)
+2026-03-10 02:52:08.840 | INFO     | __main__:235 |   Written 60/954 days …
+2026-03-10 02:52:11.773 | INFO     | __main__:270 |   Written 80/954 days … (latest: 2022-09-01)
+2026-03-10 02:52:30.667 | INFO     | __main__:270 |   Written 90/954 days … (latest: 2022-09-15)
+2026-03-10 02:52:48.872 | INFO     | __main__:270 |   Written 100/954 days … (latest: 2022-09-29)
+2026-03-10 02:52:59.532 | INFO     | __main__:235 |   Written 80/954 days …
+2026-03-10 02:53:07.135 | INFO     | __main__:270 |   Written 110/954 days … (latest: 2022-10-14)
+2026-03-10 02:53:23.624 | INFO     | __main__:270 |   Written 120/954 days … (latest: 2022-10-31)
+2026-03-10 02:53:40.305 | INFO     | __main__:270 |   Written 130/954 days … (latest: 2022-11-15)
+2026-03-10 02:53:44.682 | INFO     | __main__:235 |   Written 100/954 days …
+2026-03-10 02:53:47.493 | INFO     | __main__:231 |   Written 150/954 days …
+2026-03-10 02:53:56.797 | INFO     | __main__:270 |   Written 140/954 days … (latest: 2022-11-29)
+2026-03-10 02:54:13.974 | INFO     | __main__:270 |   Written 150/954 days … (latest: 2022-12-13)
+2026-03-10 02:54:29.974 | INFO     | __main__:235 |   Written 120/954 days …
+2026-03-10 02:54:30.341 | INFO     | __main__:270 |   Written 160/954 days … (latest: 2022-12-27)
+2026-03-10 02:54:46.301 | INFO     | __main__:270 |   Written 170/954 days … (latest: 2023-01-10)
+2026-03-10 02:55:02.240 | INFO     | __main__:270 |   Written 180/954 days … (latest: 2023-01-24)
+2026-03-10 02:55:13.347 | INFO     | __main__:235 |   Written 140/954 days …
+2026-03-10 02:55:18.080 | INFO     | __main__:270 |   Written 190/954 days … (latest: 2023-03-13)
+2026-03-10 02:55:34.934 | INFO     | __main__:270 |   Written 200/954 days … (latest: 2023-03-27)
+2026-03-10 02:55:35.411 | INFO     | __main__:231 |   Written 200/954 days …
+2026-03-10 02:55:54.372 | INFO     | __main__:270 |   Written 210/954 days … (latest: 2023-04-13)
+2026-03-10 02:55:58.231 | INFO     | __main__:235 |   Written 160/954 days …
+2026-03-10 02:56:15.711 | INFO     | __main__:270 |   Written 220/954 days … (latest: 2023-04-28)
+2026-03-10 02:56:37.137 | INFO     | __main__:270 |   Written 230/954 days … (latest: 2023-05-15)
+2026-03-10 02:56:42.806 | INFO     | __main__:235 |   Written 180/954 days …
+2026-03-10 02:56:59.522 | INFO     | __main__:270 |   Written 240/954 days … (latest: 2023-05-29)
+2026-03-10 02:57:20.981 | INFO     | __main__:270 |   Written 250/954 days … (latest: 2023-06-12)
+2026-03-10 02:57:23.678 | INFO     | __main__:231 |   Written 250/954 days …
+2026-03-10 02:57:27.540 | INFO     | __main__:235 |   Written 200/954 days …
+2026-03-10 02:57:42.175 | INFO     | __main__:270 |   Written 260/954 days … (latest: 2023-06-26)
+2026-03-10 02:58:03.636 | INFO     | __main__:270 |   Written 270/954 days … (latest: 2023-07-11)
+2026-03-10 02:58:11.798 | INFO     | __main__:235 |   Written 220/954 days …
+2026-03-10 02:58:25.842 | INFO     | __main__:270 |   Written 280/954 days … (latest: 2023-07-25)
+2026-03-10 02:58:47.794 | INFO     | __main__:270 |   Written 290/954 days … (latest: 2023-08-08)
+2026-03-10 02:58:55.832 | INFO     | __main__:235 |   Written 240/954 days …
+2026-03-10 02:59:10.478 | INFO     | __main__:270 |   Written 300/954 days … (latest: 2023-08-23)
+2026-03-10 02:59:11.275 | INFO     | __main__:231 |   Written 300/954 days …
+2026-03-10 02:59:32.907 | INFO     | __main__:270 |   Written 310/954 days … (latest: 2023-09-06)
+2026-03-10 02:59:41.166 | INFO     | __main__:235 |   Written 260/954 days …
+2026-03-10 02:59:55.011 | INFO     | __main__:270 |   Written 320/954 days … (latest: 2023-09-21)
+2026-03-10 03:00:17.214 | INFO     | __main__:270 |   Written 330/954 days … (latest: 2023-10-09)
+2026-03-10 03:00:26.890 | INFO     | __main__:235 |   Written 280/954 days …
+2026-03-10 03:00:41.954 | INFO     | __main__:270 |   Written 340/954 days … (latest: 2023-10-23)
+2026-03-10 03:01:01.457 | INFO     | __main__:231 |   Written 350/954 days …
+2026-03-10 03:01:09.527 | INFO     | __main__:270 |   Written 350/954 days … (latest: 2023-11-10)
+2026-03-10 03:01:14.213 | INFO     | __main__:235 |   Written 300/954 days …
+2026-03-10 03:01:38.553 | INFO     | __main__:270 |   Written 360/954 days … (latest: 2023-11-29)
+2026-03-10 03:02:00.377 | INFO     | __main__:235 |   Written 320/954 days …
+2026-03-10 03:02:05.801 | INFO     | __main__:270 |   Written 370/954 days … (latest: 2023-12-15)
+2026-03-10 03:02:32.279 | INFO     | __main__:270 |   Written 380/954 days … (latest: 2024-01-04)
+2026-03-10 03:02:44.902 | INFO     | __main__:235 |   Written 340/954 days …
+2026-03-10 03:02:52.316 | INFO     | __main__:231 |   Written 400/954 days …
+2026-03-10 03:02:59.139 | INFO     | __main__:270 |   Written 390/954 days … (latest: 2024-01-20)
+2026-03-10 03:03:25.562 | INFO     | __main__:270 |   Written 400/954 days … (latest: 2024-02-09)
+2026-03-10 03:03:29.042 | INFO     | __main__:235 |   Written 360/954 days …
+2026-03-10 03:03:52.080 | INFO     | __main__:270 |   Written 410/954 days … (latest: 2024-04-01)
+2026-03-10 03:04:05.209 | INFO     | __main__:424 | 
+2026-03-10 03:04:05.210 | INFO     | __main__:425 |   DATA ENGINE — TRAINING PIPELINE
+2026-03-10 03:04:05.210 | INFO     | __main__:426 |   Source  :  C:\Users\sasan\.gemini\antigravity\scratch\upstox_historical_data\DAT
+2026-03-10 03:04:05.210 | INFO     | __main__:427 |   Output  :  C:\Users\sasan\Downloads\DATA ENGINE\TRAINING DATA
+2026-03-10 03:04:05.211 | INFO     | __main__:428 |   Range   :  2022-01-01 → 2026-03-10
+2026-03-10 03:04:05.211 | INFO     | __main__:429 | 
+2026-03-10 03:04:05.248 | INFO     | __main__:435 | Trading days in range: 1034
+2026-03-10 03:04:05.249 | INFO     | __main__:203 | =======================================================
+2026-03-10 03:04:05.249 | INFO     | __main__:204 | STEP 1  — Building per-day raw Parquet files (Streaming)
+2026-03-10 03:04:05.250 | INFO     | __main__:205 |           Source: C:\Users\sasan\.gemini\antigravity\scratch\upstox_historical_data\DAT
+2026-03-10 03:04:05.250 | INFO     | __main__:206 |           Target: C:\Users\sasan\Downloads\DATA ENGINE\TRAINING DATA\raw
+2026-03-10 03:04:05.250 | INFO     | __main__:207 | =======================================================
+2026-03-10 03:04:05.252 | INFO     | __main__:221 | Scanning index CSV to build target date list …
+2026-03-10 03:04:05.557 | INFO     | __main__:237 | Found 954 trading days to process.
+2026-03-10 03:04:14.590 | INFO     | __main__:235 |   Written 380/954 days …
+2026-03-10 03:04:20.932 | INFO     | __main__:270 |   Written 420/954 days … (latest: 2024-04-22)
+2026-03-10 03:04:43.864 | INFO     | __main__:231 |   Written 450/954 days …
+2026-03-10 03:04:50.023 | INFO     | __main__:270 |   Written 430/954 days … (latest: 2024-05-09)
+2026-03-10 03:04:56.938 | INFO     | __main__:332 |   Written 10/954 days … (latest: 2022-01-14)
+2026-03-10 03:05:03.766 | INFO     | __main__:235 |   Written 400/954 days …
+2026-03-10 03:05:18.457 | INFO     | __main__:270 |   Written 440/954 days … (latest: 2024-05-27)
+2026-03-10 03:05:46.554 | INFO     | __main__:332 |   Written 20/954 days … (latest: 2022-01-31)
+2026-03-10 03:05:50.629 | INFO     | __main__:270 |   Written 450/954 days … (latest: 2024-06-14)
+2026-03-10 03:05:52.812 | INFO     | __main__:235 |   Written 420/954 days …
+2026-03-10 03:06:28.001 | INFO     | __main__:270 |   Written 460/954 days … (latest: 2024-07-08)
+2026-03-10 03:06:38.185 | INFO     | __main__:228 |   Skipped 100 existing days …
+2026-03-10 03:06:39.047 | INFO     | __main__:332 |   Written 30/954 days … (latest: 2022-03-17)
+2026-03-10 03:06:42.527 | INFO     | __main__:231 |   Written 500/954 days …
+2026-03-10 03:06:43.563 | INFO     | __main__:235 |   Written 440/954 days …
+2026-03-10 03:07:01.053 | INFO     | __main__:270 |   Written 470/954 days … (latest: 2024-07-30)
+2026-03-10 03:07:26.502 | INFO     | __main__:332 |   Written 40/954 days … (latest: 2022-04-01)
+2026-03-10 03:07:28.525 | INFO     | __main__:235 |   Written 460/954 days …
+2026-03-10 03:07:33.772 | INFO     | __main__:270 |   Written 480/954 days … (latest: 2024-08-21)
+2026-03-10 03:08:06.784 | INFO     | __main__:270 |   Written 490/954 days … (latest: 2024-09-11)
+2026-03-10 03:08:14.149 | INFO     | __main__:332 |   Written 50/954 days … (latest: 2022-04-19)
+2026-03-10 03:08:14.159 | INFO     | __main__:235 |   Written 480/954 days …
+2026-03-10 03:08:32.147 | INFO     | __main__:231 |   Written 550/954 days …
+2026-03-10 03:08:39.789 | INFO     | __main__:270 |   Written 500/954 days … (latest: 2024-10-03)
+2026-03-10 03:08:59.722 | INFO     | __main__:235 |   Written 500/954 days …
+2026-03-10 03:09:02.126 | INFO     | __main__:332 |   Written 60/954 days … (latest: 2022-05-04)
+2026-03-10 03:09:12.790 | INFO     | __main__:270 |   Written 510/954 days … (latest: 2024-10-24)
+2026-03-10 03:09:47.334 | INFO     | __main__:235 |   Written 520/954 days …
+2026-03-10 03:09:48.155 | INFO     | __main__:270 |   Written 520/954 days … (latest: 2024-11-13)
+2026-03-10 03:09:51.701 | INFO     | __main__:332 |   Written 70/954 days … (latest: 2022-05-18)
+2026-03-10 03:10:21.081 | INFO     | __main__:270 |   Written 530/954 days … (latest: 2024-12-06)
+2026-03-10 03:10:24.428 | INFO     | __main__:231 |   Written 600/954 days …
+2026-03-10 03:10:32.405 | INFO     | __main__:235 |   Written 540/954 days …
+2026-03-10 03:10:38.992 | INFO     | __main__:332 |   Written 80/954 days … (latest: 2022-06-01)
+2026-03-10 03:10:56.605 | INFO     | __main__:270 |   Written 540/954 days … (latest: 2024-12-31)
+2026-03-10 03:11:17.656 | INFO     | __main__:235 |   Written 560/954 days …
+2026-03-10 03:11:26.757 | INFO     | __main__:332 |   Written 90/954 days … (latest: 2022-06-15)
+2026-03-10 03:11:34.671 | INFO     | __main__:270 |   Written 550/954 days … (latest: 2025-01-24)
+2026-03-10 03:11:49.824 | INFO     | __main__:228 |   Skipped 150 existing days …
+2026-03-10 03:12:02.241 | INFO     | __main__:235 |   Written 580/954 days …
+2026-03-10 03:12:12.468 | INFO     | __main__:270 |   Written 560/954 days … (latest: 2025-02-18)
+2026-03-10 03:12:12.877 | INFO     | __main__:231 |   Written 650/954 days …
+2026-03-10 03:12:13.433 | INFO     | __main__:332 |   Written 100/954 days … (latest: 2022-06-29)
+2026-03-10 03:12:46.616 | INFO     | __main__:235 |   Written 600/954 days …
+2026-03-10 03:12:50.572 | INFO     | __main__:270 |   Written 570/954 days … (latest: 2025-04-16)
+2026-03-10 03:13:00.342 | INFO     | __main__:332 |   Written 110/954 days … (latest: 2022-07-13)
+2026-03-10 03:13:28.122 | INFO     | __main__:270 |   Written 580/954 days … (latest: 2025-05-13)
+2026-03-10 03:13:30.458 | INFO     | __main__:235 |   Written 620/954 days …
+2026-03-10 03:13:46.900 | INFO     | __main__:332 |   Written 120/954 days … (latest: 2022-07-27)
+2026-03-10 03:14:01.078 | INFO     | __main__:231 |   Written 700/954 days …
+2026-03-10 03:14:05.915 | INFO     | __main__:270 |   Written 590/954 days … (latest: 2025-06-06)
+2026-03-10 03:14:14.596 | INFO     | __main__:235 |   Written 640/954 days …
+2026-03-10 03:14:37.491 | INFO     | __main__:332 |   Written 130/954 days … (latest: 2022-08-10)
+2026-03-10 03:14:45.695 | INFO     | __main__:270 |   Written 600/954 days … (latest: 2025-07-02)
+2026-03-10 03:15:00.720 | INFO     | __main__:235 |   Written 660/954 days …
+2026-03-10 03:15:24.638 | INFO     | __main__:270 |   Written 610/954 days … (latest: 2025-07-25)
+2026-03-10 03:15:29.398 | INFO     | __main__:332 |   Written 140/954 days … (latest: 2022-08-25)
+2026-03-10 03:15:45.459 | INFO     | __main__:235 |   Written 680/954 days …
+2026-03-10 03:15:50.805 | INFO     | __main__:231 |   Written 750/954 days …
+2026-03-10 03:16:03.266 | INFO     | __main__:270 |   Written 620/954 days … (latest: 2025-08-21)
+2026-03-10 03:16:03.266 | INFO     | __main__:228 |   Skipped 200 existing days …
+2026-03-10 03:16:20.751 | INFO     | __main__:332 |   Written 150/954 days … (latest: 2022-09-09)
+2026-03-10 03:16:29.997 | INFO     | __main__:235 |   Written 700/954 days …
+2026-03-10 03:16:41.771 | INFO     | __main__:270 |   Written 630/954 days … (latest: 2025-09-17)
+2026-03-10 03:17:11.620 | INFO     | __main__:332 |   Written 160/954 days … (latest: 2022-09-23)
+2026-03-10 03:17:13.331 | INFO     | __main__:235 |   Written 720/954 days …
+2026-03-10 03:17:20.054 | INFO     | __main__:270 |   Written 640/954 days … (latest: 2025-10-15)
+2026-03-10 03:17:37.297 | INFO     | __main__:231 |   Written 800/954 days …
+2026-03-10 03:17:56.880 | INFO     | __main__:235 |   Written 740/954 days …
+2026-03-10 03:17:58.356 | INFO     | __main__:270 |   Written 650/954 days … (latest: 2025-11-12)
+2026-03-10 03:18:02.476 | INFO     | __main__:332 |   Written 170/954 days … (latest: 2022-10-10)
+2026-03-10 03:18:36.718 | INFO     | __main__:270 |   Written 660/954 days … (latest: 2025-12-08)
+2026-03-10 03:18:41.573 | INFO     | __main__:235 |   Written 760/954 days …
+2026-03-10 03:18:53.473 | INFO     | __main__:332 |   Written 180/954 days … (latest: 2022-10-24)
+2026-03-10 03:19:14.715 | INFO     | __main__:270 |   Written 670/954 days … (latest: 2026-01-02)
+2026-03-10 03:19:23.297 | INFO     | __main__:231 |   Written 850/954 days …
+2026-03-10 03:19:25.074 | INFO     | __main__:235 |   Written 780/954 days …
+2026-03-10 03:19:44.177 | INFO     | __main__:332 |   Written 190/954 days … (latest: 2022-11-09)
+2026-03-10 03:19:53.023 | INFO     | __main__:270 |   Written 680/954 days … (latest: 2026-01-30)
+2026-03-10 03:20:00.730 | INFO     | __main__:228 |   Skipped 250 existing days …
+2026-03-10 03:20:08.877 | INFO     | __main__:235 |   Written 800/954 days …
+2026-03-10 03:20:31.323 | INFO     | __main__:270 |   Written 690/954 days … (latest: 2026-02-24)
+2026-03-10 03:20:35.138 | INFO     | __main__:332 |   Written 200/954 days … (latest: 2022-11-23)
+2026-03-10 03:20:46.379 | SUCCESS  | __main__:233 | STEP 1 complete: 889 written, 65 already existed.
+2026-03-10 03:20:46.429 | INFO     | __main__:243 | =======================================================
+2026-03-10 03:20:46.430 | INFO     | __main__:244 | STEP 2  — Preprocessing  (1034 trading days)
+2026-03-10 03:20:46.430 | INFO     | __main__:245 | =======================================================
+2026-03-10 03:20:46.613 | SUCCESS  | __main__:272 | STEP 1 complete: 694 written, 260 already existed.
+2026-03-10 03:20:46.651 | INFO     | __main__:281 | =======================================================
+2026-03-10 03:20:46.651 | INFO     | __main__:282 | STEP 2  — Preprocessing  (1034 trading days)
+2026-03-10 03:20:46.651 | INFO     | __main__:283 | =======================================================
+2026-03-10 03:20:48.323 | SUCCESS  | __main__:237 | STEP 1 complete: 818 written, 136 already existed.
+2026-03-10 03:20:48.395 | INFO     | __main__:247 | =======================================================
+2026-03-10 03:20:48.395 | INFO     | __main__:248 | STEP 2  — Preprocessing  (1034 trading days)
+2026-03-10 03:20:48.396 | INFO     | __main__:249 | =======================================================
+2026-03-10 03:21:30.377 | INFO     | __main__:332 |   Written 210/954 days … (latest: 2022-12-07)
+2026-03-10 03:22:26.084 | INFO     | __main__:332 |   Written 220/954 days … (latest: 2022-12-21)
+2026-03-10 03:23:21.779 | INFO     | __main__:332 |   Written 230/954 days … (latest: 2023-01-04)
+2026-03-10 03:24:17.465 | INFO     | __main__:332 |   Written 240/954 days … (latest: 2023-01-18)
+2026-03-10 03:25:08.515 | INFO     | __main__:332 |   Written 250/954 days … (latest: 2023-02-02)
+2026-03-10 03:25:58.769 | INFO     | __main__:332 |   Written 260/954 days … (latest: 2023-03-21)
+2026-03-10 03:26:50.613 | INFO     | __main__:332 |   Written 270/954 days … (latest: 2023-04-06)
+2026-03-10 03:27:45.925 | INFO     | __main__:332 |   Written 280/954 days … (latest: 2023-04-24)
+2026-03-10 03:28:41.601 | INFO     | __main__:332 |   Written 290/954 days … (latest: 2023-05-09)
+2026-03-10 03:29:37.160 | INFO     | __main__:332 |   Written 300/954 days … (latest: 2023-05-23)
+2026-03-10 03:30:32.075 | INFO     | __main__:332 |   Written 310/954 days … (latest: 2023-06-06)
+2026-03-10 03:31:27.347 | INFO     | __main__:332 |   Written 320/954 days … (latest: 2023-06-20)
+2026-03-10 03:32:22.556 | INFO     | __main__:332 |   Written 330/954 days … (latest: 2023-07-05)
+2026-03-10 03:33:18.175 | INFO     | __main__:332 |   Written 340/954 days … (latest: 2023-07-19)
+2026-03-10 03:34:13.535 | INFO     | __main__:332 |   Written 350/954 days … (latest: 2023-08-02)
+2026-03-10 03:35:08.758 | INFO     | __main__:332 |   Written 360/954 days … (latest: 2023-08-17)
+2026-03-10 03:36:03.961 | INFO     | __main__:332 |   Written 370/954 days … (latest: 2023-08-31)
+2026-03-10 03:36:59.455 | INFO     | __main__:332 |   Written 380/954 days … (latest: 2023-09-14)
+2026-03-10 03:37:54.911 | INFO     | __main__:332 |   Written 390/954 days … (latest: 2023-09-29)
+2026-03-10 03:38:49.987 | INFO     | __main__:332 |   Written 400/954 days … (latest: 2023-10-16)
+2026-03-10 03:39:48.816 | INFO     | __main__:332 |   Written 410/954 days … (latest: 2023-10-31)
+2026-03-10 03:40:49.210 | INFO     | __main__:332 |   Written 420/954 days … (latest: 2023-11-13)
+2026-03-10 03:41:49.333 | INFO     | __main__:332 |   Written 430/954 days … (latest: 2023-11-29)
+2026-03-10 03:42:49.063 | INFO     | __main__:332 |   Written 440/954 days … (latest: 2023-12-13)
+2026-03-10 03:43:48.930 | INFO     | __main__:332 |   Written 450/954 days … (latest: 2023-12-28)
+2026-03-10 03:44:48.998 | INFO     | __main__:332 |   Written 460/954 days … (latest: 2024-01-11)
+2026-03-10 03:45:49.529 | INFO     | __main__:332 |   Written 470/954 days … (latest: 2024-01-25)
+2026-03-10 03:46:49.759 | INFO     | __main__:332 |   Written 480/954 days … (latest: 2024-02-09)
+2026-03-10 03:47:49.572 | INFO     | __main__:332 |   Written 490/954 days … (latest: 2024-03-27)
+2026-03-10 03:48:31.784 | INFO     | __main__:248 |   Skipped 50 existing days …
+2026-03-10 03:48:31.786 | INFO     | __main__:248 |   Skipped 100 existing days …
+2026-03-10 03:48:31.789 | INFO     | __main__:248 |   Skipped 150 existing days …
+2026-03-10 03:48:31.791 | INFO     | __main__:248 |   Skipped 200 existing days …
+2026-03-10 03:48:31.794 | INFO     | __main__:248 |   Skipped 250 existing days …
+2026-03-10 03:48:31.797 | INFO     | __main__:248 |   Skipped 300 existing days …
+2026-03-10 03:48:31.802 | INFO     | __main__:248 |   Skipped 350 existing days …
+2026-03-10 03:48:31.808 | INFO     | __main__:248 |   Skipped 400 existing days …
+2026-03-10 03:48:31.812 | INFO     | __main__:248 |   Skipped 450 existing days …
+2026-03-10 03:48:31.813 | SUCCESS  | __main__:334 | STEP 1 complete: 497 written, 457 already existed.
+2026-03-10 03:48:31.860 | INFO     | __main__:343 | =======================================================
+2026-03-10 03:48:31.860 | INFO     | __main__:344 | STEP 2  — Preprocessing  (1034 trading days)
+2026-03-10 03:48:31.861 | INFO     | __main__:345 | =======================================================
+2026-03-10 23:27:44.803 | INFO     | __main__:424 | 
+2026-03-10 23:27:44.803 | INFO     | __main__:425 |   DATA ENGINE — TRAINING PIPELINE
+2026-03-10 23:27:44.804 | INFO     | __main__:426 |   Source  :  C:\Users\sasan\.gemini\antigravity\scratch\upstox_historical_data\DAT
+2026-03-10 23:27:44.804 | INFO     | __main__:427 |   Output  :  C:\Users\sasan\Downloads\DATA ENGINE\TRAINING DATA
+2026-03-10 23:27:44.804 | INFO     | __main__:428 |   Range   :  2022-01-01 → 2026-03-10
+2026-03-10 23:27:44.804 | INFO     | __main__:429 | 
+2026-03-10 23:27:44.848 | INFO     | __main__:435 | Trading days in range: 1034
+2026-03-10 23:27:44.848 | INFO     | __main__:203 | =======================================================
+2026-03-10 23:27:44.849 | INFO     | __main__:204 | STEP 1  — Building per-day raw Parquet files (Streaming)
+2026-03-10 23:27:44.849 | INFO     | __main__:205 |           Source: C:\Users\sasan\.gemini\antigravity\scratch\upstox_historical_data\DAT
+2026-03-10 23:27:44.849 | INFO     | __main__:206 |           Target: C:\Users\sasan\Downloads\DATA ENGINE\TRAINING DATA\raw
+2026-03-10 23:27:44.849 | INFO     | __main__:207 | =======================================================
+2026-03-10 23:27:44.851 | INFO     | __main__:221 | Scanning index CSV to build target date list …
+2026-03-10 23:27:45.187 | INFO     | __main__:237 | Found 954 trading days to process.
+2026-03-10 23:27:45.195 | INFO     | __main__:248 |   Skipped 50 existing days …
+2026-03-10 23:27:45.203 | INFO     | __main__:248 |   Skipped 100 existing days …
+2026-03-10 23:27:45.211 | INFO     | __main__:248 |   Skipped 150 existing days …
+2026-03-10 23:27:45.218 | INFO     | __main__:248 |   Skipped 200 existing days …
+2026-03-10 23:27:45.227 | INFO     | __main__:248 |   Skipped 250 existing days …
+2026-03-10 23:27:45.233 | INFO     | __main__:248 |   Skipped 300 existing days …
+2026-03-10 23:27:45.239 | INFO     | __main__:248 |   Skipped 350 existing days …
+2026-03-10 23:27:45.244 | INFO     | __main__:248 |   Skipped 400 existing days …
+2026-03-10 23:27:45.249 | INFO     | __main__:248 |   Skipped 450 existing days …
+2026-03-10 23:27:45.254 | INFO     | __main__:248 |   Skipped 500 existing days …
+2026-03-10 23:27:45.260 | INFO     | __main__:248 |   Skipped 550 existing days …
+2026-03-10 23:27:45.268 | INFO     | __main__:248 |   Skipped 600 existing days …
+2026-03-10 23:27:45.276 | INFO     | __main__:248 |   Skipped 650 existing days …
+2026-03-10 23:27:45.284 | INFO     | __main__:248 |   Skipped 700 existing days …
+2026-03-10 23:27:45.291 | INFO     | __main__:248 |   Skipped 750 existing days …
+2026-03-10 23:27:45.298 | INFO     | __main__:248 |   Skipped 800 existing days …
+2026-03-10 23:27:45.305 | INFO     | __main__:248 |   Skipped 850 existing days …
+2026-03-10 23:27:45.310 | INFO     | __main__:248 |   Skipped 900 existing days …
+2026-03-10 23:27:45.319 | INFO     | __main__:248 |   Skipped 950 existing days …
+2026-03-10 23:27:45.320 | SUCCESS  | __main__:334 | STEP 1 complete: 0 written, 954 already existed.
+2026-03-10 23:27:45.360 | INFO     | __main__:343 | =======================================================
+2026-03-10 23:27:45.361 | INFO     | __main__:344 | STEP 2  — Preprocessing  (1034 trading days)
+2026-03-10 23:27:45.361 | INFO     | __main__:345 | =======================================================
