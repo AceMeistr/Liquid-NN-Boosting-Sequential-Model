@@ -1,26 +1,18 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from dataclasses import dataclass
 import logging
-<<<<<<< HEAD
-=======
 from pathlib import Path
->>>>>>> main
 
 import numpy as np
 import pandas as pd
 import torch
-<<<<<<< HEAD
-from torch.utils.data import Dataset
-
-=======
 from numpy.lib.stride_tricks import sliding_window_view
 from sklearn.preprocessing import RobustScaler, StandardScaler
 from typing import Iterator
 from torch.utils.data import Dataset
 
 from modelmk1.common.paths import discover_data_engine_parquets
->>>>>>> main
 from modelmk1.features.indicators import add_all_indicators
 
 
@@ -29,8 +21,6 @@ logger = logging.getLogger(__name__)
 
 REQUIRED_COLUMNS = {"timestamp", "price", "high", "low", "volume"}
 
-<<<<<<< HEAD
-=======
 # Column mapping from DATA ENGINE raw schema to ModelMK1 schema
 _DATA_ENGINE_COL_MAP = {
     "idx_close": "price",
@@ -39,7 +29,6 @@ _DATA_ENGINE_COL_MAP = {
     "idx_volume": "volume",
 }
 
->>>>>>> main
 
 @dataclass
 class DataBundle:
@@ -49,8 +38,6 @@ class DataBundle:
     feature_columns: list[str]
 
 
-<<<<<<< HEAD
-=======
 @dataclass
 class SplitBundle:
     """Pre-split data bundle for train/val with fitted scaler."""
@@ -64,7 +51,6 @@ class SplitBundle:
     feature_columns: list[str]
 
 
->>>>>>> main
 class TickDataset(Dataset):
     def __init__(self, sequences: np.ndarray, targets: np.ndarray) -> None:
         self.sequences = torch.tensor(sequences, dtype=torch.float32)
@@ -77,11 +63,6 @@ class TickDataset(Dataset):
         return self.sequences[idx], self.targets[idx]
 
 
-<<<<<<< HEAD
-def load_tick_df(path: str) -> pd.DataFrame:
-    source = pd.read_parquet(path) if path.lower().endswith((".parquet", ".pq")) else pd.read_csv(path)
-
-=======
 # ---------------------------------------------------------------------------
 # Loading and validation
 # ---------------------------------------------------------------------------
@@ -160,7 +141,6 @@ def load_tick_df(path: str) -> pd.DataFrame:
     # Auto-map DATA ENGINE columns if present
     source = _map_data_engine_columns(source)
 
->>>>>>> main
     missing = REQUIRED_COLUMNS.difference(source.columns)
     if missing:
         raise ValueError(f"Missing required columns: {sorted(missing)}")
@@ -194,19 +174,6 @@ def resample_ticks(df: pd.DataFrame, freq: str = "1min") -> pd.DataFrame:
     return agg
 
 
-<<<<<<< HEAD
-def _compute_target_signed_range(price: np.ndarray, horizon: int) -> np.ndarray:
-    targets = np.full(shape=(len(price),), fill_value=np.nan, dtype=np.float64)
-    for idx in range(len(price) - horizon):
-        future = price[idx + 1 : idx + 1 + horizon]
-        future_range = future.max() - future.min()
-        direction = np.sign(future.mean() - price[idx])
-        targets[idx] = future_range if direction >= 0 else -future_range
-    return targets
-
-
-def build_supervised_data(df: pd.DataFrame, seq_len: int, horizon: int, include_stoch_rsi: bool = True) -> DataBundle:
-=======
 # ---------------------------------------------------------------------------
 # Target computation - VECTORIZED (50-100x faster than loop)
 # ---------------------------------------------------------------------------
@@ -237,7 +204,7 @@ def _compute_target_signed_range(price: np.ndarray, horizon: int) -> np.ndarray:
 
     ranges = w_max - w_min
     directions = np.sign(w_mean - price[: len(windows)])
-    # Normalise by current price → dimensionless fraction (~0.002–0.015)
+    # Normalise by current price â†’ dimensionless fraction (~0.002â€“0.015)
     # Makes targets stationary across price regimes (16k vs 24k Nifty etc.)
     current_price = np.clip(np.abs(price[: len(windows)]), 1e-8, None)
     targets[: len(windows)] = (ranges * directions) / current_price
@@ -255,7 +222,6 @@ def build_supervised_data(
     horizon: int,
     include_stoch_rsi: bool = True,
 ) -> DataBundle:
->>>>>>> main
     if seq_len <= 0:
         raise ValueError("seq_len must be > 0")
     if horizon <= 0:
@@ -271,28 +237,6 @@ def build_supervised_data(
     feature_columns = [col for col in feat_df.columns if col not in {"timestamp", "target"}]
     if not feature_columns:
         raise ValueError("No feature columns available after preprocessing.")
-<<<<<<< HEAD
-    x_values = feat_df[feature_columns].to_numpy(dtype=np.float32)
-    y_values = feat_df["target"].to_numpy(dtype=np.float32)
-
-    sequences: list[np.ndarray] = []
-    xgb_features: list[np.ndarray] = []
-    targets: list[float] = []
-    for end_idx in range(seq_len, len(feat_df)):
-        sequences.append(x_values[end_idx - seq_len : end_idx])
-        xgb_features.append(x_values[end_idx - 1])
-        targets.append(float(y_values[end_idx]))
-
-    if not sequences:
-        raise ValueError("Not enough rows for selected seq_len/horizon.")
-
-    return DataBundle(
-        sequences=np.stack(sequences),
-        xgb_features=np.stack(xgb_features),
-        targets=np.array(targets, dtype=np.float32),
-        feature_columns=feature_columns,
-    )
-=======
 
     x_values = feat_df[feature_columns].to_numpy(dtype=np.float32)
     y_values = feat_df["target"].to_numpy(dtype=np.float32)
@@ -403,4 +347,3 @@ def walk_forward_splits(
             scaler=scaler,
             feature_columns=bundle.feature_columns,
         )
->>>>>>> main

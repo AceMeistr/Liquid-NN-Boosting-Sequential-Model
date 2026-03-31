@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import argparse
 import torch
@@ -16,8 +16,6 @@ def run_build(
     seq_len: int,
     horizon: int,
     resample_freq: str,
-<<<<<<< HEAD
-=======
     num_heads: int = 4,
     num_layers: int = 2,
     use_attention: bool = True,
@@ -26,7 +24,6 @@ def run_build(
     mamba_d_state: int = 16,
     mamba_d_conv: int = 4,
     mamba_expand: int = 2,
->>>>>>> main
 ) -> dict:
     paths = get_app_paths()
     model_dir = paths.outputs / "model"
@@ -34,9 +31,6 @@ def run_build(
 
     resolved_input_size = input_size if input_size is not None else len(get_feature_schema(include_stoch_rsi=True))
 
-<<<<<<< HEAD
-    model = MarketLNN(input_size=resolved_input_size, hidden_size=hidden_size, output_size=1, dropout=dropout)
-=======
     model = MarketLNN(
         input_size=resolved_input_size,
         hidden_size=hidden_size,
@@ -51,7 +45,6 @@ def run_build(
         mamba_d_conv=mamba_d_conv,
         mamba_expand=mamba_expand,
     )
->>>>>>> main
     init_path = model_dir / "lnn_init.pt"
     torch.save(
         {
@@ -59,8 +52,6 @@ def run_build(
             "input_size": resolved_input_size,
             "hidden_size": hidden_size,
             "dropout": dropout,
-<<<<<<< HEAD
-=======
             "num_heads": num_heads,
             "num_layers": num_layers,
             "use_attention": use_attention,
@@ -69,7 +60,6 @@ def run_build(
                     "mamba_d_state": mamba_d_state,
                     "mamba_d_conv": mamba_d_conv,
                     "mamba_expand": mamba_expand,
->>>>>>> main
             "seq_len": seq_len,
             "horizon": horizon,
             "resample_freq": resample_freq,
@@ -81,27 +71,17 @@ def run_build(
     write_json(
         model_dir / "xgb_template.json",
         {
-<<<<<<< HEAD
-            "n_estimators": 600,
-            "max_depth": 6,
-            "learning_rate": 0.03,
-=======
             "n_estimators": 800,
             "max_depth": 7,
             "learning_rate": 0.025,
->>>>>>> main
             "subsample": 0.8,
             "colsample_bytree": 0.8,
             "reg_alpha": 1e-3,
             "reg_lambda": 1.0,
-<<<<<<< HEAD
-            "tree_method": "hist",
-=======
             "min_child_weight": 3,
             "gamma": 0.1,
             "tree_method": "hist",
             "device": "cuda",
->>>>>>> main
             "objective": "reg:squarederror",
             "status": "template_not_trained",
         },
@@ -125,8 +105,6 @@ def main() -> None:
     parser.add_argument("--seq-len", type=int, default=64)
     parser.add_argument("--horizon", type=int, default=15)
     parser.add_argument("--resample-freq", type=str, default="1min")
-<<<<<<< HEAD
-=======
     parser.add_argument("--num-heads", type=int, default=4)
     parser.add_argument("--num-layers", type=int, default=2)
     parser.add_argument("--use-attention", action="store_true", default=False)
@@ -135,7 +113,6 @@ def main() -> None:
     parser.add_argument("--mamba-d-state", type=int, default=16)
     parser.add_argument("--mamba-d-conv", type=int, default=4)
     parser.add_argument("--mamba-expand", type=int, default=2)
->>>>>>> main
     args = parser.parse_args()
     print(
         run_build(
@@ -145,8 +122,6 @@ def main() -> None:
             seq_len=args.seq_len,
             horizon=args.horizon,
             resample_freq=args.resample_freq,
-<<<<<<< HEAD
-=======
             num_heads=args.num_heads,
             num_layers=args.num_layers,
             use_attention=args.use_attention,
@@ -155,7 +130,6 @@ def main() -> None:
             mamba_d_state=args.mamba_d_state,
             mamba_d_conv=args.mamba_d_conv,
             mamba_expand=args.mamba_expand,
->>>>>>> main
         )
     )
 

@@ -1,25 +1,13 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import argparse
-<<<<<<< HEAD
-
-import optuna
-
-from modelmk1.common.paths import get_app_paths, resolve_data_file
-from modelmk1.common.runtime import write_json
-from modelmk1.train.train_lnn import build_parser as build_lnn_parser
-from modelmk1.train.train_lnn import run_training
-
-
-def run_optuna(trials: int, timeout: int, data_path: str | None, study_name: str) -> dict:
-    dataset = resolve_data_file(data_path)
-=======
 import gc
 import json
 import logging
 import math
 import threading
 from datetime import datetime, timezone
+from pathlib import Path
 from statistics import median
 from typing import Any
 
@@ -28,7 +16,13 @@ import torch
 from optuna.trial import TrialState
 
 from modelmk1.common.paths import get_app_paths, resolve_data_file
-from modelmk1.common.runtime import write_json, enable_performance_mode, build_sqlite_storage_url, is_cuda_oom
+from modelmk1.common.runtime import (
+    write_json,
+    enable_performance_mode,
+    build_optuna_rdb_storage,
+    is_cuda_oom,
+)
+from modelmk1.tuning.plateau import compute_plateau_penalty
 from modelmk1.train.train_lnn import build_parser as build_lnn_parser
 from modelmk1.train.train_lnn import run_training
 
@@ -37,8 +31,19 @@ _CHECKPOINT_WRITE_LOCK = threading.Lock()
 
 _TARGET_SHARPE_MIN = 2.0
 _TARGET_SHARPE_STRETCH = 3.0
-_TARGET_DIRECTIONAL_ACC = 0.51
+_TARGET_DIRECTIONAL_ACC = 0.52
+_TARGET_DIRECTIONAL_ACC_STRICT_EPS = 1e-6
+_TARGET_PBO_MAX = 0.20
+_PBO_SHARPE_TANDEM_WEIGHT = 2.00
 _DEFAULT_BATCH_SIZE_CHOICES = [128, 256, 512]
+_DEFAULT_PRUNER = "median"
+_SUPPORTED_PRUNERS = ("median", "hyperband")
+_PLATEAU_MAX_NEIGHBORS = 8
+_PLATEAU_MIN_LOCAL_NEIGHBORS = 4
+_PLATEAU_RADIUS = 0.30
+_PLATEAU_GRACE_TRIALS = 12
+_PLATEAU_CLIFF_WEIGHT = 0.35
+_PLATEAU_SPREAD_WEIGHT = 0.10
 
 
 def _normalize_batch_size_choices(batch_size_choices: list[int] | tuple[int, ...] | None) -> list[int]:
@@ -71,6 +76,29 @@ def _objective_distributions(batch_size_choices: list[int]) -> dict[str, optuna.
         "use_ema": optuna.distributions.CategoricalDistribution([True, False]),
         "ema_decay": optuna.distributions.FloatDistribution(0.99, 0.9999, log=True),
     }
+
+
+def _build_pruner(pruner_name: str) -> optuna.pruners.BasePruner:
+    name = str(pruner_name).strip().lower()
+    if name == "median":
+        return optuna.pruners.MedianPruner(n_startup_trials=3, n_warmup_steps=0, interval_steps=1)
+    if name == "hyperband":
+        # Epochs are short (<= 15), so keep resource range tight and rung checks frequent.
+        return optuna.pruners.HyperbandPruner(min_resource=1, max_resource=15, reduction_factor=3)
+    raise ValueError(f"Unsupported pruner '{pruner_name}'. Supported values: {', '.join(_SUPPORTED_PRUNERS)}")
+
+
+def _effective_sharpe_with_pbo(raw_sharpe: float, pbo_proxy: float) -> tuple[float, float, float]:
+    if not math.isfinite(raw_sharpe):
+        raw_sharpe = -10.0
+    if not math.isfinite(pbo_proxy):
+        pbo_proxy = 1.0
+
+    normalized_pbo = float(min(max(float(pbo_proxy), 0.0), 1.0))
+    pbo_excess = max(normalized_pbo - _TARGET_PBO_MAX, 0.0)
+    pbo_sharpe_penalty = pbo_excess * _PBO_SHARPE_TANDEM_WEIGHT
+    effective_sharpe = float(raw_sharpe) - float(pbo_sharpe_penalty)
+    return float(effective_sharpe), float(pbo_sharpe_penalty), float(normalized_pbo)
 
 
 def _is_valid_param_value(value: Any, distribution: optuna.distributions.BaseDistribution) -> bool:
@@ -186,6 +214,8 @@ def _study_payload(study: optuna.Study, db_path: str) -> tuple[dict, dict[str, i
         payload["best_params"] = best.params
         payload["best_val_loss"] = float(best.user_attrs.get("best_val_loss", 0.0))
         payload["best_sharpe_ratio"] = float(best.user_attrs.get("cpcv_sharpe_mean", 0.0))
+        payload["best_effective_sharpe"] = float(best.user_attrs.get("effective_sharpe_for_objective", 0.0))
+        payload["best_pbo_proxy"] = float(best.user_attrs.get("cpcv_pbo_proxy", 1.0))
         payload["best_directional_accuracy"] = float(best.user_attrs.get("val_directional_accuracy", 0.0))
         payload["best_meets_target"] = bool(best.user_attrs.get("meets_target", False))
 
@@ -282,11 +312,19 @@ def run_optuna(
     narrow_from_params: list[dict[str, Any]] | None = None,
     seed_trials: list[dict[str, Any]] | None = None,
     bootstrap_manual_checkpoint: bool = True,
+    pruner: str = _DEFAULT_PRUNER,
+    storage_url: str | None = None,
+    storage_db_path: str | None = None,
 ) -> dict:
     dataset = resolve_data_file(data_path)
     model_dir = get_app_paths().outputs / "model"
     model_dir.mkdir(parents=True, exist_ok=True)
-    db_path = str((model_dir / "optuna_study.db").resolve())
+    db_file = Path(storage_db_path).expanduser() if storage_db_path else (model_dir / "optuna_study.db")
+    if not db_file.is_absolute():
+        db_file = (Path.cwd() / db_file).resolve()
+    db_path = str(db_file.resolve())
+    storage_reference = str(storage_url).strip() if storage_url else db_path
+    storage_backend = build_optuna_rdb_storage(db_path=db_path, storage_url=storage_url)
     batch_choices = [max(1, int(fixed_batch_size))] if fixed_batch_size is not None else _normalize_batch_size_choices(batch_size_choices)
     search_distributions = _objective_distributions(batch_choices)
     narrowed_params = [payload for payload in (narrow_from_params or []) if isinstance(payload, dict) and payload]
@@ -356,36 +394,11 @@ def run_optuna(
         choices_to_use = deduped_seeded if deduped_seeded else normalized_choices
         return trial.suggest_categorical(name, choices_to_use)
 
->>>>>>> main
 
     def objective(trial: optuna.Trial) -> float:
         parser = build_lnn_parser()
         args = parser.parse_args([])
         args.data_path = str(dataset)
-<<<<<<< HEAD
-        args.epochs = trial.suggest_int("epochs", 8, 20)
-        args.batch_size = trial.suggest_categorical("batch_size", [64, 128, 256])
-        args.hidden_size = trial.suggest_categorical("hidden_size", [64, 128, 256, 512])
-        args.dropout = trial.suggest_float("dropout", 0.05, 0.4)
-        args.lr = trial.suggest_float("lr", 1e-4, 5e-3, log=True)
-        args.weight_decay = trial.suggest_float("weight_decay", 1e-6, 1e-2, log=True)
-        args.seq_len = trial.suggest_categorical("seq_len", [32, 64, 128])
-        args.horizon = trial.suggest_categorical("horizon", [10, 15, 30])
-        args.early_stopping_patience = 4
-        args.seed = 42
-        args.cpu = False
-        metrics = run_training(args)
-        trial.report(metrics["best_val_loss"], step=trial.number)
-        if trial.should_prune():
-            raise optuna.TrialPruned()
-        return metrics["best_val_loss"]
-
-    study = optuna.create_study(direction="minimize", study_name=study_name, pruner=optuna.pruners.MedianPruner(n_warmup_steps=3))
-    study.optimize(objective, n_trials=trials, timeout=None if timeout <= 0 else timeout)
-
-    payload = {"best_value": study.best_value, "best_params": study.best_params, "study_name": study.study_name}
-    write_json(get_app_paths().outputs / "model" / "optuna_best.json", payload)
-=======
 
         # Core hyperparameters
         args.epochs = _suggest_int(trial, "epochs", 8, 15, pad=2)
@@ -453,7 +466,14 @@ def run_optuna(
         best_epoch_val = float("inf")
         no_improve_epochs = 0
 
-        def _on_epoch_end(epoch: int, _train: float, val: float, _dir_acc: float, _lr: float) -> None:
+        def _on_epoch_end(
+            epoch: int,
+            _train: float,
+            val: float,
+            _dir_acc: float,
+            _epoch_sharpe: float,
+            _lr: float,
+        ) -> None:
             nonlocal best_epoch_val, no_improve_epochs
             if val + 1e-9 < best_epoch_val:
                 best_epoch_val = val
@@ -464,18 +484,31 @@ def run_optuna(
             if not math.isfinite(val):
                 raise optuna.TrialPruned("Validation loss is non-finite")
 
-            # Report a target-aware proxy so the pruner can drop low-accuracy trials earlier.
+            epoch_sharpe = float(_epoch_sharpe)
+            if not math.isfinite(epoch_sharpe):
+                epoch_sharpe = -10.0
+
+            # Pruning score is minimized: low loss, high accuracy, and high Sharpe are rewarded.
             accuracy_penalty = max(_TARGET_DIRECTIONAL_ACC - float(_dir_acc), 0.0)
-            proxy_val = float(val) + accuracy_penalty * 0.75
-            trial.report(proxy_val, step=epoch)
+            sharpe_penalty = max(_TARGET_SHARPE_MIN - epoch_sharpe, 0.0)
+            prune_score = float(val) + accuracy_penalty * 0.75 + sharpe_penalty * 0.15
+            trial.report(prune_score, step=epoch)
 
             if epoch >= 2 and float(_dir_acc) < (_TARGET_DIRECTIONAL_ACC - 0.04):
                 raise optuna.TrialPruned(
                     f"Epoch-{epoch} directional accuracy too weak ({float(_dir_acc):.3f})"
                 )
+            if epoch >= 2 and epoch_sharpe < (_TARGET_SHARPE_MIN - 1.5):
+                raise optuna.TrialPruned(
+                    f"Epoch-{epoch} Sharpe too weak ({epoch_sharpe:.3f})"
+                )
             if epoch >= 3 and float(_dir_acc) < (_TARGET_DIRECTIONAL_ACC - 0.02):
                 raise optuna.TrialPruned(
                     f"Epoch-{epoch} directional accuracy not close to target ({float(_dir_acc):.3f})"
+                )
+            if epoch >= 3 and epoch_sharpe < (_TARGET_SHARPE_MIN - 1.0):
+                raise optuna.TrialPruned(
+                    f"Epoch-{epoch} Sharpe not close to target ({epoch_sharpe:.3f})"
                 )
 
             complete_vals = [
@@ -499,6 +532,14 @@ def run_optuna(
                 if val > baseline * 1.5:
                     raise optuna.TrialPruned(
                         f"Epoch-2 uncompetitive trial ({val:.6f} vs threshold {baseline * 1.5:.6f})"
+                    )
+
+            # Multi-metric gate: prune trials that are weak across all target metrics.
+            if epoch >= 3 and len(complete_vals) >= 3:
+                baseline = float(median(complete_vals))
+                if val > baseline * 1.25 and float(_dir_acc) < _TARGET_DIRECTIONAL_ACC and epoch_sharpe < _TARGET_SHARPE_MIN:
+                    raise optuna.TrialPruned(
+                        f"Epoch-{epoch} weak on loss/accuracy/sharpe simultaneously"
                     )
 
             # Epoch 5 hard kill zone.
@@ -534,36 +575,69 @@ def run_optuna(
         val_directional_accuracy = float(metrics.get("val_directional_accuracy", 0.0))
         cpcv = metrics.get("cpcv", {}) if isinstance(metrics.get("cpcv", {}), dict) else {}
         cpcv_sharpe_mean = float(cpcv.get("sharpe_mean", 0.0))
+        cpcv_pbo_proxy_raw = float(cpcv.get("pbo_proxy", 1.0))
+        effective_sharpe, pbo_sharpe_penalty, cpcv_pbo_proxy = _effective_sharpe_with_pbo(
+            cpcv_sharpe_mean,
+            cpcv_pbo_proxy_raw,
+        )
 
         penalty = 0.0
         if val_directional_accuracy < _TARGET_DIRECTIONAL_ACC:
             penalty += (_TARGET_DIRECTIONAL_ACC - val_directional_accuracy) * 24.0
 
-        if cpcv_sharpe_mean < _TARGET_SHARPE_MIN:
-            penalty += (_TARGET_SHARPE_MIN - cpcv_sharpe_mean) * 0.30
+        # Apply PBO via Sharpe (tandem), not as a separate global objective term.
+        if effective_sharpe < _TARGET_SHARPE_MIN:
+            penalty += (_TARGET_SHARPE_MIN - effective_sharpe) * 0.30
         else:
-            sharpe_bonus = min(cpcv_sharpe_mean, _TARGET_SHARPE_STRETCH) - _TARGET_SHARPE_MIN
+            sharpe_bonus = min(effective_sharpe, _TARGET_SHARPE_STRETCH) - _TARGET_SHARPE_MIN
             penalty -= sharpe_bonus * 0.10
 
         meets_target = bool(
-            cpcv_sharpe_mean >= _TARGET_SHARPE_MIN and val_directional_accuracy >= _TARGET_DIRECTIONAL_ACC
+            effective_sharpe >= _TARGET_SHARPE_MIN
+            and val_directional_accuracy > (_TARGET_DIRECTIONAL_ACC + _TARGET_DIRECTIONAL_ACC_STRICT_EPS)
         )
-        objective_score = best_val_loss + penalty
+        base_objective_score = best_val_loss + penalty
+        plateau = compute_plateau_penalty(
+            study=trial.study,
+            current_params=trial.params,
+            current_trial_number=trial.number,
+            base_score=base_objective_score,
+            direction="minimize",
+            distributions=search_distributions,
+            max_neighbors=_PLATEAU_MAX_NEIGHBORS,
+            min_local_neighbors=_PLATEAU_MIN_LOCAL_NEIGHBORS,
+            radius=_PLATEAU_RADIUS,
+            grace_completed_trials=_PLATEAU_GRACE_TRIALS,
+            cliff_weight=_PLATEAU_CLIFF_WEIGHT,
+            spread_weight=_PLATEAU_SPREAD_WEIGHT,
+        )
+        objective_score = base_objective_score + float(plateau["penalty"])
 
         trial.set_user_attr("best_val_loss", best_val_loss)
         trial.set_user_attr("val_directional_accuracy", val_directional_accuracy)
         trial.set_user_attr("cpcv_sharpe_mean", cpcv_sharpe_mean)
+        trial.set_user_attr("cpcv_pbo_proxy", cpcv_pbo_proxy)
+        trial.set_user_attr("effective_sharpe_for_objective", effective_sharpe)
+        trial.set_user_attr("pbo_sharpe_penalty", pbo_sharpe_penalty)
         trial.set_user_attr("meets_target", meets_target)
         trial.set_user_attr("best_epoch", int(metrics.get("best_epoch", -1)))
+        trial.set_user_attr("base_objective_score", float(base_objective_score))
+        trial.set_user_attr("plateau_penalty", float(plateau["penalty"]))
+        trial.set_user_attr("plateau_neighbor_count", int(plateau["neighbor_count"]))
+        trial.set_user_attr("plateau_neighbor_median", float(plateau["local_median"]))
+        trial.set_user_attr("plateau_neighbor_iqr", float(plateau["local_iqr"]))
+        trial.set_user_attr("plateau_cliff_gap", float(plateau["cliff_gap"]))
+        trial.set_user_attr("plateau_reason", str(plateau["reason"]))
         trial.set_user_attr("objective_score", float(objective_score))
         return float(objective_score)
 
+    selected_pruner = str(pruner).strip().lower()
     study = optuna.create_study(
         direction="minimize",
         study_name=study_name,
-        pruner=optuna.pruners.MedianPruner(n_startup_trials=3, n_warmup_steps=0, interval_steps=1),
+        pruner=_build_pruner(selected_pruner),
         sampler=optuna.samplers.TPESampler(seed=42),
-        storage=build_sqlite_storage_url(db_path),
+        storage=storage_backend,
         load_if_exists=True,
     )
     if bootstrap_manual_checkpoint:
@@ -573,8 +647,8 @@ def run_optuna(
     existing_finished_trials = len([t for t in study.trials if t.state in finished_states])
     remaining_trials = max(trials - existing_finished_trials, 0)
 
-    pre_run_archive = _archive_current_best_study(study, db_path, reason="pre_run")
-    _write_runtime_checkpoint(study, db_path)
+    pre_run_archive = _archive_current_best_study(study, storage_reference, reason="pre_run")
+    _write_runtime_checkpoint(study, storage_reference)
 
     if remaining_trials > 0:
         study.optimize(
@@ -583,7 +657,7 @@ def run_optuna(
             n_jobs=max(1, int(workers)),
             timeout=None if timeout <= 0 else timeout,
             catch=(Exception,),
-            callbacks=[lambda s, _t: _write_runtime_checkpoint(s, db_path)],
+            callbacks=[lambda s, _t: _write_runtime_checkpoint(s, storage_reference)],
         )
     else:
         logger.info(
@@ -592,8 +666,8 @@ def run_optuna(
             existing_finished_trials,
         )
 
-    _write_runtime_checkpoint(study, db_path)
-    post_run_archive = _archive_current_best_study(study, db_path, reason="post_run")
+    _write_runtime_checkpoint(study, storage_reference)
+    post_run_archive = _archive_current_best_study(study, storage_reference, reason="post_run")
 
     complete_trials = [t for t in study.trials if t.state == TrialState.COMPLETE]
 
@@ -606,6 +680,12 @@ def run_optuna(
         "best_sharpe_ratio": (
             float(study.best_trial.user_attrs.get("cpcv_sharpe_mean", 0.0)) if complete_trials else None
         ),
+        "best_effective_sharpe": (
+            float(study.best_trial.user_attrs.get("effective_sharpe_for_objective", 0.0)) if complete_trials else None
+        ),
+        "best_pbo_proxy": (
+            float(study.best_trial.user_attrs.get("cpcv_pbo_proxy", 1.0)) if complete_trials else None
+        ),
         "best_directional_accuracy": (
             float(study.best_trial.user_attrs.get("val_directional_accuracy", 0.0)) if complete_trials else None
         ),
@@ -616,9 +696,10 @@ def run_optuna(
         "workers": max(1, int(workers)),
         "fixed_batch_size": int(fixed_batch_size) if fixed_batch_size is not None else None,
         "batch_size_choices": [int(v) for v in batch_choices],
+        "pruner": selected_pruner,
         "narrow_from_params_count": len(narrowed_params),
         "seeded_trials_added": int(seeded_trials_added),
-        "storage": db_path,
+        "storage": storage_reference,
         "pre_run_archive": pre_run_archive,
         "post_run_archive": post_run_archive,
     }
@@ -627,7 +708,6 @@ def run_optuna(
         logger.info("Optuna best value: %.6f with params: %s", study.best_value, study.best_params)
     else:
         logger.warning("Optuna finished without completed trials")
->>>>>>> main
     return payload
 
 
@@ -636,16 +716,24 @@ def main() -> None:
     parser.add_argument("--trials", type=int, default=20)
     parser.add_argument("--timeout", type=int, default=0)
     parser.add_argument("--study-name", type=str, default="modelmk1_lnn_optuna")
-<<<<<<< HEAD
-    parser.add_argument("--data-path", type=str, default=None)
-    args = parser.parse_args()
-    print(run_optuna(args.trials, args.timeout, args.data_path, args.study_name))
-=======
     parser.add_argument("--workers", type=int, default=3)
     parser.add_argument("--data-path", type=str, default=None)
+    parser.add_argument("--pruner", type=str, default=_DEFAULT_PRUNER, choices=list(_SUPPORTED_PRUNERS))
+    parser.add_argument("--storage-url", type=str, default=None)
+    parser.add_argument("--storage-db-path", type=str, default=None)
     args = parser.parse_args()
-    print(run_optuna(args.trials, args.timeout, args.data_path, args.study_name, workers=args.workers))
->>>>>>> main
+    print(
+        run_optuna(
+            args.trials,
+            args.timeout,
+            args.data_path,
+            args.study_name,
+            workers=args.workers,
+            pruner=args.pruner,
+            storage_url=args.storage_url,
+            storage_db_path=args.storage_db_path,
+        )
+    )
 
 
 if __name__ == "__main__":

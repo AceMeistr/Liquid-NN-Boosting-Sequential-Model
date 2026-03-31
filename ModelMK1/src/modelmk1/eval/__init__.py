@@ -1,6 +1,4 @@
-"""Evaluation modules."""
-<<<<<<< HEAD
-=======
+﻿"""Evaluation modules."""
 
 from modelmk1.eval.cpcv import CPCVConfig, evaluate_cpcv_distribution
 from modelmk1.eval.inference_speed import benchmark_model_latency_ms, build_pipeline_speed_report
@@ -11,4 +9,3 @@ __all__ = [
 	"benchmark_model_latency_ms",
 	"build_pipeline_speed_report",
 ]
->>>>>>> main

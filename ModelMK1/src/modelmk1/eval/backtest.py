@@ -1,19 +1,11 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import argparse
-<<<<<<< HEAD
-=======
 import logging
->>>>>>> main
 
 import numpy as np
 import pandas as pd
 
-<<<<<<< HEAD
-from modelmk1.common.paths import get_app_paths
-from modelmk1.common.runtime import write_json
-
-=======
 from modelmk1.eval.cpcv import CPCVConfig, evaluate_cpcv_distribution
 from modelmk1.common.paths import get_app_paths
 from modelmk1.common.runtime import write_json
@@ -24,14 +16,11 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Core metrics
 # ---------------------------------------------------------------------------
->>>>>>> main
 
 def directional_accuracy(y_true: np.ndarray, y_pred: np.ndarray) -> float:
     return float((np.sign(y_true) == np.sign(y_pred)).mean())
 
 
-<<<<<<< HEAD
-=======
 def sharpe_ratio(returns: np.ndarray, annualization: float = 252.0) -> float:
     """Annualized Sharpe Ratio (aggregates intra-day to daily if annualization > 252)."""
     if len(returns) < 2:
@@ -61,7 +50,7 @@ def sharpe_ratio(returns: np.ndarray, annualization: float = 252.0) -> float:
 
 
 def sortino_ratio(returns: np.ndarray, annualization: float = 252.0) -> float:
-    """Sortino Ratio — penalizes only downside deviation."""
+    """Sortino Ratio â€” penalizes only downside deviation."""
     downside = returns[returns < 0]
     if len(downside) < 2:
         return 0.0
@@ -70,7 +59,7 @@ def sortino_ratio(returns: np.ndarray, annualization: float = 252.0) -> float:
 
 
 def calmar_ratio(returns: np.ndarray, equity: np.ndarray) -> float:
-    """Calmar Ratio — annualized return / max drawdown."""
+    """Calmar Ratio â€” annualized return / max drawdown."""
     total_return = equity[-1] - equity[0] if len(equity) > 1 else 0.0
     drawdown = equity - np.maximum.accumulate(equity)
     max_dd = abs(float(np.min(drawdown)))
@@ -169,7 +158,6 @@ def run_backtest(
     return metrics
 
 
->>>>>>> main
 def main() -> None:
     parser = argparse.ArgumentParser(description="Backtest using generated predictions")
     parser.add_argument("--predictions", type=str, default=None)
@@ -181,20 +169,6 @@ def main() -> None:
 
     y_pred = df["prediction"].to_numpy(dtype=np.float64)
     y_true = df["target"].to_numpy(dtype=np.float64)
-<<<<<<< HEAD
-    pnl = np.sign(y_pred) * y_true
-    equity = np.cumsum(pnl)
-    drawdown = equity - np.maximum.accumulate(equity)
-
-    metrics = {
-        "mse": float(np.mean((y_true - y_pred) ** 2)),
-        "mae": float(np.mean(np.abs(y_true - y_pred))),
-        "directional_accuracy": directional_accuracy(y_true, y_pred),
-        "total_pnl_proxy": float(np.sum(pnl)),
-        "max_drawdown_proxy": float(np.min(drawdown)),
-    }
-    write_json(paths.outputs / "backtest_metrics.json", metrics)
-=======
 
     metrics = run_backtest(y_true, y_pred)
     write_json(paths.outputs / "backtest_metrics.json", metrics)
@@ -203,7 +177,6 @@ def main() -> None:
     for k, v in metrics.items():
         logger.info("  %-30s %s", k, f"{v:.6f}" if isinstance(v, float) else v)
 
->>>>>>> main
     print(metrics)
 
 

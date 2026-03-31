@@ -56,6 +56,9 @@ def main() -> None:
     parser.add_argument("--timeout", type=int, default=0)
     parser.add_argument("--batch-sizes", type=str, default="64,96")
     parser.add_argument("--study-prefix", type=str, default="modelmk1_lnn_oomsafe")
+    parser.add_argument("--pruner", type=str, default="median", choices=["median", "hyperband"])
+    parser.add_argument("--storage-url", type=str, default=None)
+    parser.add_argument("--storage-db-path", type=str, default=None)
     args = parser.parse_args()
 
     batch_size_a, batch_size_b = _parse_batch_sizes(args.batch_sizes)
@@ -86,6 +89,9 @@ def main() -> None:
         narrow_from_params=None,
         seed_trials=None,
         bootstrap_manual_checkpoint=False,
+        pruner=args.pruner,
+        storage_url=args.storage_url,
+        storage_db_path=args.storage_db_path,
     )
 
     logger.info(
@@ -106,6 +112,9 @@ def main() -> None:
         narrow_from_params=None,
         seed_trials=None,
         bootstrap_manual_checkpoint=False,
+        pruner=args.pruner,
+        storage_url=args.storage_url,
+        storage_db_path=args.storage_db_path,
     )
 
     candidates: list[dict[str, Any]] = []
@@ -170,6 +179,9 @@ def main() -> None:
         narrow_from_params=focus_params,
         seed_trials=seed_trials,
         bootstrap_manual_checkpoint=False,
+        pruner=args.pruner,
+        storage_url=args.storage_url,
+        storage_db_path=args.storage_db_path,
     )
 
     all_stages = [stage_a, stage_b, stage_focus]
@@ -187,6 +199,9 @@ def main() -> None:
             "batch_sizes": [batch_size_a, batch_size_b],
             "focus_batch_choices": sorted(focus_batch_choices),
             "timeout": int(args.timeout),
+            "pruner": str(args.pruner),
+            "storage_url": args.storage_url,
+            "storage_db_path": args.storage_db_path,
             "study_prefix": args.study_prefix,
             "seed_trials_count": len(seed_trials),
         },

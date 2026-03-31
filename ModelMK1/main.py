@@ -1,9 +1,10 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import argparse
 import logging
 import sys
 from pathlib import Path
+from typing import Callable
 
 
 ROOT = Path(__file__).resolve().parent
@@ -12,12 +13,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 
-def main() -> None:
-    from modelmk1.common.runtime import configure_logging
-
-    configure_logging()
-    logger = logging.getLogger(__name__)
-
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="ModelMK1 launcher")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -27,23 +23,13 @@ def main() -> None:
     pipeline_parser.add_argument("--data-path", type=str, default=None)
     pipeline_parser.add_argument("--trials", type=int, default=20)
     pipeline_parser.add_argument("--build-only", action="store_true")
+    pipeline_parser.add_argument("--pruner", type=str, default="median", choices=["median", "hyperband"])
+    pipeline_parser.add_argument("--storage-url", type=str, default=None)
+    pipeline_parser.add_argument("--storage-db-path", type=str, default=None)
 
     lnn_parser = subparsers.add_parser("train-lnn", help="Train LNN")
     lnn_parser.add_argument("--data-path", type=str, default=None)
 
-<<<<<<< HEAD
-    optuna_parser = subparsers.add_parser("tune", help="Run Optuna")
-    optuna_parser.add_argument("--data-path", type=str, default=None)
-    optuna_parser.add_argument("--trials", type=int, default=20)
-
-    hybrid_parser = subparsers.add_parser("train-hybrid", help="Train hybrid residual model")
-    hybrid_parser.add_argument("--data-path", type=str, default=None)
-
-    predict_parser = subparsers.add_parser("predict", help="Generate predictions")
-    predict_parser.add_argument("--data-path", type=str, default=None)
-
-    subparsers.add_parser("backtest", help="Run backtest on predictions")
-=======
     graph_parser = subparsers.add_parser("train-graph", help="Train Route-J T-GCN graph model")
     graph_parser.add_argument("--data-path", type=str, default=None)
 
@@ -53,6 +39,9 @@ def main() -> None:
     optuna_parser.add_argument("--timeout", type=int, default=0)
     optuna_parser.add_argument("--study-name", type=str, default="modelmk1_lnn_optuna")
     optuna_parser.add_argument("--workers", type=int, default=3)
+    optuna_parser.add_argument("--pruner", type=str, default="median", choices=["median", "hyperband"])
+    optuna_parser.add_argument("--storage-url", type=str, default=None)
+    optuna_parser.add_argument("--storage-db-path", type=str, default=None)
 
     xgb_optuna_parser = subparsers.add_parser("tune-xgb-spectral", help="Run Optuna for classification spectral XGBoost")
     xgb_optuna_parser.add_argument("--data-path", type=str, default=None)
@@ -61,6 +50,9 @@ def main() -> None:
     xgb_optuna_parser.add_argument("--study-name", type=str, default="modelmk1_xgb_optuna")
     xgb_optuna_parser.add_argument("--jobs", type=int, default=1)
     xgb_optuna_parser.add_argument("--tickers", type=str, default=None)
+    xgb_optuna_parser.add_argument("--pruner", type=str, default="median", choices=["median", "hyperband"])
+    xgb_optuna_parser.add_argument("--storage-url", type=str, default=None)
+    xgb_optuna_parser.add_argument("--storage-db-path", type=str, default=None)
 
     hybrid_parser = subparsers.add_parser("train-hybrid", help="Train hybrid residual model")
     hybrid_parser.add_argument("--data-path", type=str, default=None)
@@ -102,172 +94,231 @@ def main() -> None:
     speed_parser.add_argument("--cpu", action="store_true")
 
     subparsers.add_parser("info", help="Show model and system info")
+    return parser
 
->>>>>>> main
-    args = parser.parse_args()
+
+def _handle_build(args: argparse.Namespace) -> None:
+    from modelmk1.train.build_models import run_build
+
+    print(run_build(None, 128, 0.15, 64, 15, "1min"))
+
+
+def _handle_pipeline(args: argparse.Namespace) -> None:
+    from modelmk1.train.train_pipeline import run_pipeline
+
+    print(
+        run_pipeline(
+            args.data_path,
+            args.trials,
+            args.build_only,
+            pruner=args.pruner,
+            storage_url=args.storage_url,
+            storage_db_path=args.storage_db_path,
+        )
+    )
+
+
+def _handle_train_lnn(args: argparse.Namespace) -> None:
+    from modelmk1.train.train_lnn import build_parser, run_training
+
+    lnn_args = build_parser().parse_args([])
+    lnn_args.data_path = args.data_path
+    print(run_training(lnn_args))
+
+
+def _handle_train_graph(args: argparse.Namespace) -> None:
+    from modelmk1.graph.train_graph import build_parser, run_graph_training
+
+    graph_args = build_parser().parse_args([])
+    graph_args.data_path = args.data_path
+    print(run_graph_training(graph_args))
+
+
+def _handle_tune(args: argparse.Namespace) -> None:
+    from modelmk1.tuning.optuna_lnn import run_optuna
+
+    print(
+        run_optuna(
+            args.trials,
+            args.timeout,
+            args.data_path,
+            args.study_name,
+            workers=args.workers,
+            pruner=args.pruner,
+            storage_url=args.storage_url,
+            storage_db_path=args.storage_db_path,
+        )
+    )
+
+
+def _handle_tune_xgb_spectral(args: argparse.Namespace) -> None:
+    from modelmk1.tuning.optuna_xgb_spectral import run_optuna_xgb_spectral
+
+    print(
+        run_optuna_xgb_spectral(
+            trials=args.trials,
+            timeout=args.timeout,
+            data_path=args.data_path,
+            study_name=args.study_name,
+            jobs=args.jobs,
+            tickers_raw=args.tickers,
+            pruner=args.pruner,
+            storage_url=args.storage_url,
+            storage_db_path=args.storage_db_path,
+        )
+    )
+
+
+def _handle_train_hybrid(args: argparse.Namespace) -> None:
+    from modelmk1.train.train_hybrid import build_parser, run_hybrid_training
+
+    hybrid_args = build_parser().parse_args([])
+    hybrid_args.data_path = args.data_path
+    hybrid_args.resample_freq = args.resample_freq
+    hybrid_args.seq_len = args.seq_len
+    hybrid_args.horizon = args.horizon
+    hybrid_args.train_ratio = args.train_ratio
+    hybrid_args.use_best_studies = args.use_best_studies
+    hybrid_args.clean_state = args.clean_state
+    hybrid_args.cpu = args.cpu
+    print(run_hybrid_training(hybrid_args))
+
+
+def _handle_train_xgb_spectral(args: argparse.Namespace) -> None:
+    from modelmk1.train.train_xgb_spectral import build_parser, run_xgb_spectral_training
+
+    spectral_args = build_parser().parse_args([])
+    spectral_args.data_path = args.data_path
+    spectral_args.top_n = args.top_n
+    spectral_args.corr_window = args.corr_window
+    spectral_args.horizon = args.horizon
+    spectral_args.seq_len = args.seq_len
+    spectral_args.train_ratio = args.train_ratio
+    spectral_args.num_boost_round = args.num_boost_round
+    spectral_args.early_stopping_rounds = args.early_stopping_rounds
+    spectral_args.robust_quantile_low = args.robust_quantile_low
+    spectral_args.robust_quantile_high = args.robust_quantile_high
+    spectral_args.tickers = args.tickers
+    print(run_xgb_spectral_training(spectral_args))
+
+
+def _handle_predict(args: argparse.Namespace) -> None:
+    from modelmk1.predict.predict import main as predict_main
+
+    predict_argv = ["predict.py"]
+    if args.data_path:
+        predict_argv += ["--data-path", args.data_path]
+    if args.with_confidence:
+        predict_argv.append("--with-confidence")
+    sys.argv = predict_argv
+    predict_main()
+
+
+def _handle_backtest(args: argparse.Namespace) -> None:
+    from modelmk1.eval.backtest import main as backtest_main
+
+    backtest_main()
+
+
+def _handle_export_onnx(args: argparse.Namespace) -> None:
+    from modelmk1.common.paths import get_app_paths
+    from modelmk1.models.onnx_export import export_to_onnx, validate_onnx
+
+    paths = get_app_paths()
+    model_dir = paths.outputs / "model"
+    ckpt = model_dir / "lnn_best.pt"
+    onnx_path = model_dir / "lnn_model.onnx"
+    export_to_onnx(ckpt, onnx_path, seq_len=args.seq_len)
+    validate_onnx(onnx_path, ckpt, seq_len=args.seq_len)
+    print(f"ONNX model exported to {onnx_path}")
+
+
+def _handle_inference_speed(args: argparse.Namespace) -> None:
+    import torch
+
+    from modelmk1.common.paths import get_app_paths
+    from modelmk1.common.runtime import pick_device, safe_torch_load, write_json
+    from modelmk1.eval.inference_speed import benchmark_model_latency_ms, build_pipeline_speed_report
+    from modelmk1.models.checkpoint_utils import checkpoint_model_kwargs, is_legacy_checkpoint
+    from modelmk1.models.lnn_model import MarketLNN
+
+    device = pick_device(force_cpu=args.cpu)
+    paths = get_app_paths()
+    checkpoint = safe_torch_load(paths.outputs / "model" / "lnn_best.pt", map_location=device)
+    model = MarketLNN(
+        **checkpoint_model_kwargs(checkpoint),
+    ).to(device)
+    model.load_state_dict(checkpoint["model_state_dict"], strict=not is_legacy_checkpoint(checkpoint))
+
+    avg_ms = benchmark_model_latency_ms(
+        model,
+        seq_len=int(checkpoint.get("seq_len", args.seq_len)),
+        input_size=int(checkpoint["input_size"]),
+        device=device,
+        warmup_runs=10,
+        timed_runs=120,
+    )
+    report = build_pipeline_speed_report(
+        avg_model_latency_ms=avg_ms,
+        with_confidence=True,
+        mc_samples=args.mc_samples,
+    )
+    write_json(paths.outputs / "inference_speed_budget.json", report)
+    if device.type == "cuda":
+        torch.cuda.empty_cache()
+    print(report)
+
+
+def _handle_info(args: argparse.Namespace) -> None:
+    import torch
+
+    from modelmk1.common.paths import get_app_paths
+    from modelmk1.common.runtime import get_device_info, pick_device
+
+    device = pick_device()
+    info = get_device_info(device)
+    paths = get_app_paths()
+    info["python_version"] = sys.version.split()[0]
+    info["torch_version"] = torch.__version__
+    info["cuda_available"] = torch.cuda.is_available()
+    info["model_dir"] = str(paths.outputs / "model")
+    info["training_data_dir"] = str(paths.training_data)
+    info["data_engine_raw"] = str(paths.data_engine_raw)
+    info["data_engine_exists"] = paths.data_engine_root.exists()
+    for k, v in info.items():
+        print(f"  {k}: {v}")
+
+
+COMMAND_HANDLERS: dict[str, Callable[[argparse.Namespace], None]] = {
+    "build": _handle_build,
+    "pipeline": _handle_pipeline,
+    "train-lnn": _handle_train_lnn,
+    "train-graph": _handle_train_graph,
+    "tune": _handle_tune,
+    "tune-xgb-spectral": _handle_tune_xgb_spectral,
+    "train-hybrid": _handle_train_hybrid,
+    "train-xgb-spectral": _handle_train_xgb_spectral,
+    "predict": _handle_predict,
+    "backtest": _handle_backtest,
+    "export-onnx": _handle_export_onnx,
+    "inference-speed": _handle_inference_speed,
+    "info": _handle_info,
+}
+
+
+def main() -> None:
+    from modelmk1.common.runtime import configure_logging
+
+    configure_logging()
+    logger = logging.getLogger(__name__)
+
+    args = build_parser().parse_args()
 
     try:
-        if args.command == "build":
-            from modelmk1.train.build_models import run_build
-
-            print(run_build(None, 128, 0.15, 64, 15, "1min"))
-        elif args.command == "pipeline":
-            from modelmk1.train.train_pipeline import run_pipeline
-
-            print(run_pipeline(args.data_path, args.trials, args.build_only))
-        elif args.command == "train-lnn":
-            from modelmk1.train.train_lnn import build_parser, run_training
-
-            lnn_args = build_parser().parse_args([])
-            lnn_args.data_path = args.data_path
-            print(run_training(lnn_args))
-<<<<<<< HEAD
-        elif args.command == "tune":
-            from modelmk1.tuning.optuna_lnn import run_optuna
-
-            print(run_optuna(args.trials, 0, args.data_path, "modelmk1_lnn_optuna"))
-=======
-        elif args.command == "train-graph":
-            from modelmk1.graph.train_graph import build_parser, run_graph_training
-
-            graph_args = build_parser().parse_args([])
-            graph_args.data_path = args.data_path
-            print(run_graph_training(graph_args))
-        elif args.command == "tune":
-            from modelmk1.tuning.optuna_lnn import run_optuna
-
-            print(run_optuna(args.trials, args.timeout, args.data_path, args.study_name, workers=args.workers))
-        elif args.command == "tune-xgb-spectral":
-            from modelmk1.tuning.optuna_xgb_spectral import run_optuna_xgb_spectral
-
-            print(
-                run_optuna_xgb_spectral(
-                    trials=args.trials,
-                    timeout=args.timeout,
-                    data_path=args.data_path,
-                    study_name=args.study_name,
-                    jobs=args.jobs,
-                    tickers_raw=args.tickers,
-                )
-            )
->>>>>>> main
-        elif args.command == "train-hybrid":
-            from modelmk1.train.train_hybrid import build_parser, run_hybrid_training
-
-            hybrid_args = build_parser().parse_args([])
-            hybrid_args.data_path = args.data_path
-<<<<<<< HEAD
-            print(run_hybrid_training(hybrid_args))
-        elif args.command == "predict":
-            from modelmk1.predict.predict import main as predict_main
-
-            sys.argv = ["predict.py"] + (["--data-path", args.data_path] if args.data_path else [])
-=======
-            hybrid_args.resample_freq = args.resample_freq
-            hybrid_args.seq_len = args.seq_len
-            hybrid_args.horizon = args.horizon
-            hybrid_args.train_ratio = args.train_ratio
-            hybrid_args.use_best_studies = args.use_best_studies
-            hybrid_args.clean_state = args.clean_state
-            hybrid_args.cpu = args.cpu
-            print(run_hybrid_training(hybrid_args))
-        elif args.command == "train-xgb-spectral":
-            from modelmk1.train.train_xgb_spectral import build_parser, run_xgb_spectral_training
-
-            spectral_args = build_parser().parse_args([])
-            spectral_args.data_path = args.data_path
-            spectral_args.top_n = args.top_n
-            spectral_args.corr_window = args.corr_window
-            spectral_args.horizon = args.horizon
-            spectral_args.seq_len = args.seq_len
-            spectral_args.train_ratio = args.train_ratio
-            spectral_args.num_boost_round = args.num_boost_round
-            spectral_args.early_stopping_rounds = args.early_stopping_rounds
-            spectral_args.robust_quantile_low = args.robust_quantile_low
-            spectral_args.robust_quantile_high = args.robust_quantile_high
-            spectral_args.tickers = args.tickers
-            print(run_xgb_spectral_training(spectral_args))
-        elif args.command == "predict":
-            from modelmk1.predict.predict import main as predict_main
-
-            predict_argv = ["predict.py"]
-            if args.data_path:
-                predict_argv += ["--data-path", args.data_path]
-            if args.with_confidence:
-                predict_argv.append("--with-confidence")
-            sys.argv = predict_argv
->>>>>>> main
-            predict_main()
-        elif args.command == "backtest":
-            from modelmk1.eval.backtest import main as backtest_main
-
-            backtest_main()
-<<<<<<< HEAD
-=======
-        elif args.command == "export-onnx":
-            from modelmk1.common.paths import get_app_paths
-            from modelmk1.models.onnx_export import export_to_onnx, validate_onnx
-
-            paths = get_app_paths()
-            model_dir = paths.outputs / "model"
-            ckpt = model_dir / "lnn_best.pt"
-            onnx_path = model_dir / "lnn_model.onnx"
-            export_to_onnx(ckpt, onnx_path, seq_len=args.seq_len)
-            validate_onnx(onnx_path, ckpt, seq_len=args.seq_len)
-            print(f"ONNX model exported to {onnx_path}")
-        elif args.command == "inference-speed":
-            import torch
-
-            from modelmk1.common.paths import get_app_paths
-            from modelmk1.common.runtime import pick_device, safe_torch_load, write_json
-            from modelmk1.eval.inference_speed import benchmark_model_latency_ms, build_pipeline_speed_report
-            from modelmk1.models.checkpoint_utils import checkpoint_model_kwargs, is_legacy_checkpoint
-            from modelmk1.models.lnn_model import MarketLNN
-
-            device = pick_device(force_cpu=args.cpu)
-            paths = get_app_paths()
-            checkpoint = safe_torch_load(paths.outputs / "model" / "lnn_best.pt", map_location=device)
-            model = MarketLNN(
-                **checkpoint_model_kwargs(checkpoint),
-            ).to(device)
-            model.load_state_dict(checkpoint["model_state_dict"], strict=not is_legacy_checkpoint(checkpoint))
-
-            avg_ms = benchmark_model_latency_ms(
-                model,
-                seq_len=int(checkpoint.get("seq_len", args.seq_len)),
-                input_size=int(checkpoint["input_size"]),
-                device=device,
-                warmup_runs=10,
-                timed_runs=120,
-            )
-            report = build_pipeline_speed_report(
-                avg_model_latency_ms=avg_ms,
-                with_confidence=True,
-                mc_samples=args.mc_samples,
-            )
-            write_json(paths.outputs / "inference_speed_budget.json", report)
-            if device.type == "cuda":
-                torch.cuda.empty_cache()
-            print(report)
-        elif args.command == "info":
-            import torch
-
-            from modelmk1.common.paths import get_app_paths
-            from modelmk1.common.runtime import get_device_info, pick_device
-
-            device = pick_device()
-            info = get_device_info(device)
-            paths = get_app_paths()
-            info["python_version"] = sys.version.split()[0]
-            info["torch_version"] = torch.__version__
-            info["cuda_available"] = torch.cuda.is_available()
-            info["model_dir"] = str(paths.outputs / "model")
-            info["training_data_dir"] = str(paths.training_data)
-            info["data_engine_raw"] = str(paths.data_engine_raw)
-            info["data_engine_exists"] = paths.data_engine_root.exists()
-            for k, v in info.items():
-                print(f"  {k}: {v}")
->>>>>>> main
+        handler = COMMAND_HANDLERS.get(args.command)
+        if handler is None:
+            raise ValueError(f"Unknown command: {args.command}")
+        handler(args)
     except Exception:
         logger.exception("Command failed: %s", args.command)
         raise SystemExit(1)

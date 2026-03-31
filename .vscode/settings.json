@@ -3,5 +3,14 @@
     "python-envs.pythonProjects": [],
     "python.analysis.extraPaths": [
         "ModelMK1/src"
-    ]
+    ],
+    "python.testing.unittestArgs": [
+        "-v",
+        "-s",
+        "./ModelMK1",
+        "-p",
+        "*test.py"
+    ],
+    "python.testing.pytestEnabled": false,
+    "python.testing.unittestEnabled": true
 }

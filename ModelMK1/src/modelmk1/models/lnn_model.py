@@ -1,11 +1,5 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
-<<<<<<< HEAD
-import warnings
-
-import torch
-import torch.nn as nn
-=======
 import importlib
 import math
 import warnings
@@ -14,7 +8,6 @@ from typing import Any, cast
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
->>>>>>> main
 
 try:
     from ncps.torch import LTC
@@ -24,24 +17,6 @@ except Exception:
     LTC = None
     HAS_LTC = False
 
-<<<<<<< HEAD
-
-class MarketLNN(nn.Module):
-    def __init__(self, input_size: int, hidden_size: int, output_size: int = 1, dropout: float = 0.1) -> None:
-        super().__init__()
-        if HAS_LTC:
-            self.backbone = LTC(input_size, hidden_size)
-        else:
-            warnings.warn("ncps unavailable; using GRU fallback.", RuntimeWarning)
-            self.backbone = nn.GRU(input_size=input_size, hidden_size=hidden_size, batch_first=True)
-        self.dropout = nn.Dropout(dropout)
-        self.head = nn.Linear(hidden_size, output_size)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        out, _ = self.backbone(x)
-        out = self.dropout(out[:, -1, :])
-        return self.head(out)
-=======
 try:
     import numpy as np
 except ImportError:
@@ -97,7 +72,7 @@ def predict_lnn_batched(
 
 
 # ---------------------------------------------------------------------------
-# Squeeze‑and‑Excitation feature gating
+# Squeezeâ€‘andâ€‘Excitation feature gating
 # ---------------------------------------------------------------------------
 
 class SqueezeExcite(nn.Module):
@@ -121,11 +96,11 @@ class SqueezeExcite(nn.Module):
 
 
 # ---------------------------------------------------------------------------
-# Multi‑Head Self‑Attention block with causal mask
+# Multiâ€‘Head Selfâ€‘Attention block with causal mask
 # ---------------------------------------------------------------------------
 
 class TemporalAttention(nn.Module):
-    """Multi-head self-attention with causal masking for time‑series."""
+    """Multi-head self-attention with causal masking for timeâ€‘series."""
 
     def __init__(self, d_model: int, num_heads: int = 4, dropout: float = 0.1) -> None:
         super().__init__()
@@ -145,7 +120,7 @@ class TemporalAttention(nn.Module):
 
 
 # ---------------------------------------------------------------------------
-# Feed‑Forward block with residual
+# Feedâ€‘Forward block with residual
 # ---------------------------------------------------------------------------
 
 class FeedForward(nn.Module):
@@ -455,4 +430,3 @@ class MarketLNN(nn.Module):
         else:
             self.eval()
         return stacked.mean(dim=0), stacked.std(dim=0)
->>>>>>> main

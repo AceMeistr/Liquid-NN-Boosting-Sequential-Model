@@ -1,16 +1,5 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
-<<<<<<< HEAD
-import json
-import logging
-import random
-import time
-from pathlib import Path
-from typing import Callable, TypeVar
-
-import numpy as np
-import torch
-=======
 import copy
 import json
 import logging
@@ -24,22 +13,11 @@ from typing import Any, Callable, Generator, TypeVar
 import numpy as np
 import torch
 import torch.nn as nn
->>>>>>> main
 
 
 _LOGGING_INITIALIZED = False
 T = TypeVar("T")
 
-<<<<<<< HEAD
-
-def configure_logging(level: str = "INFO") -> None:
-    global _LOGGING_INITIALIZED
-    if _LOGGING_INITIALIZED:
-        return
-    logging.basicConfig(
-        level=getattr(logging, level.upper(), logging.INFO),
-        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-=======
 logger = logging.getLogger(__name__)
 
 
@@ -59,19 +37,10 @@ def configure_logging(level: str = "INFO", json_format: bool = False) -> None:
         level=getattr(logging, level.upper(), logging.INFO),
         format=fmt,
         stream=sys.stdout,
->>>>>>> main
     )
     _LOGGING_INITIALIZED = True
 
 
-<<<<<<< HEAD
-def pick_device(force_cpu: bool = False) -> torch.device:
-    if force_cpu:
-        return torch.device("cpu")
-    return torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-
-=======
 # ---------------------------------------------------------------------------
 # Device management
 # ---------------------------------------------------------------------------
@@ -110,20 +79,10 @@ def get_device_info(device: torch.device) -> dict[str, Any]:
 # Reproducibility
 # ---------------------------------------------------------------------------
 
->>>>>>> main
 def set_seed(seed: int = 42) -> None:
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
-<<<<<<< HEAD
-    torch.cuda.manual_seed_all(seed)
-
-
-def write_json(path: Path, payload: dict) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as fp:
-        json.dump(payload, fp, indent=2)
-=======
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.deterministic = True
@@ -156,7 +115,6 @@ def read_json(path: Path, missing_ok: bool = False) -> dict:
         return {}
     with path.open("r", encoding="utf-8") as fp:
         return json.load(fp)
->>>>>>> main
 
 
 def retry(operation: Callable[[], T], retries: int = 3, delay_seconds: float = 0.15) -> T:
@@ -177,8 +135,6 @@ def safe_torch_load(path: Path, map_location: torch.device) -> dict:
         return torch.load(path, map_location=map_location, weights_only=True)
     except TypeError:
         return torch.load(path, map_location=map_location)
-<<<<<<< HEAD
-=======
 
 
 # ---------------------------------------------------------------------------
@@ -276,4 +232,46 @@ def build_sqlite_storage_url(db_path: str) -> str:
     p = Path(db_path).resolve()
     # Windows paths need extra slashes for SQLAlchemy
     return f"sqlite:///{p.as_posix()}"
->>>>>>> main
+
+
+def build_optuna_rdb_storage(
+    db_path: str | None = None,
+    storage_url: str | None = None,
+    sqlite_timeout_seconds: int = 120,
+    heartbeat_interval_seconds: int = 60,
+    grace_period_seconds: int = 300,
+) -> Any:
+    """Build Optuna RDB storage for persistent multi-worker studies.
+
+    If ``storage_url`` is provided, it is used directly (for example PostgreSQL).
+    Otherwise, a local SQLite URL is built from ``db_path``.
+    """
+    try:
+        import optuna
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError("Optuna is required to build study storage") from exc
+
+    resolved_storage_url = str(storage_url).strip() if storage_url else ""
+    if not resolved_storage_url:
+        if not db_path:
+            raise ValueError("Either db_path or storage_url must be provided")
+        resolved_storage_url = build_sqlite_storage_url(db_path)
+
+    storage_kwargs: dict[str, Any] = {
+        "url": resolved_storage_url,
+        "engine_kwargs": {"pool_pre_ping": True},
+        "heartbeat_interval": max(10, int(heartbeat_interval_seconds)),
+        "grace_period": max(30, int(grace_period_seconds)),
+    }
+
+    if resolved_storage_url.startswith("sqlite:///"):
+        storage_kwargs["engine_kwargs"]["connect_args"] = {
+            "timeout": max(1, int(sqlite_timeout_seconds)),
+            "check_same_thread": False,
+        }
+
+    retry_callback_factory = getattr(optuna.storages, "RetryFailedTrialCallback", None)
+    if retry_callback_factory is not None:
+        storage_kwargs["failed_trial_callback"] = retry_callback_factory(max_retry=1)
+
+    return optuna.storages.RDBStorage(**storage_kwargs)

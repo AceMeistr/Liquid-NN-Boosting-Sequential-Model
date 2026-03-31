@@ -1,0 +1,9 @@
+{
+	"servers": {
+		"Runpod Documentation": {
+			"url": "https://docs.runpod.io/mcp",
+			"type": "http"
+		}
+	},
+	"inputs": []
+}

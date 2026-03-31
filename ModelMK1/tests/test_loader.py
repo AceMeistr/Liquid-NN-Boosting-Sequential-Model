@@ -1,13 +1,7 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from pathlib import Path
 
-<<<<<<< HEAD
-import pandas as pd
-import pytest
-
-from modelmk1.data.loader import build_supervised_data, load_tick_df
-=======
 import numpy as np
 import pandas as pd
 import pytest
@@ -18,20 +12,10 @@ from modelmk1.data.loader import (
     prepare_split,
     scale_sequences,
 )
->>>>>>> main
 
 
 @pytest.fixture
 def minimal_tick_csv(tmp_path: Path) -> Path:
-<<<<<<< HEAD
-    frame = pd.DataFrame(
-        {
-            "timestamp": pd.date_range("2025-01-01", periods=300, freq="min"),
-            "price": [100 + i * 0.1 for i in range(300)],
-            "high": [100 + i * 0.1 + 0.05 for i in range(300)],
-            "low": [100 + i * 0.1 - 0.05 for i in range(300)],
-            "volume": [10 + i for i in range(300)],
-=======
     rng = np.random.default_rng(42)
     n = 400
     frame = pd.DataFrame(
@@ -41,7 +25,6 @@ def minimal_tick_csv(tmp_path: Path) -> Path:
             "high": 100 + np.cumsum(rng.normal(0, 0.1, n)) + 0.5,
             "low": 100 + np.cumsum(rng.normal(0, 0.1, n)) - 0.5,
             "volume": rng.integers(10, 1000, size=n).astype(float),
->>>>>>> main
         }
     )
     target = tmp_path / "ticks.csv"
@@ -61,8 +44,6 @@ def test_build_supervised_data_invalid_args(minimal_tick_csv: Path) -> None:
         build_supervised_data(df, seq_len=0, horizon=15)
     with pytest.raises(ValueError):
         build_supervised_data(df, seq_len=64, horizon=0)
-<<<<<<< HEAD
-=======
 
 
 def test_build_supervised_data_shapes(minimal_tick_csv: Path) -> None:
@@ -97,4 +78,3 @@ def test_scale_sequences_preserves_shape() -> None:
     scaler.fit(data.reshape(-1, 5))
     result = scale_sequences(scaler, data)
     assert result.shape == data.shape
->>>>>>> main

@@ -41,7 +41,7 @@ PIPELINE_END        = date(2026, 3, 10)   # adjust to today or specific end date
 
 _HERE    = Path(__file__).parent.resolve()   # DATA ENGINE folder
 _DAT     = Path(
-    r"C:\Users\sasan\Downloads\MFT\DATA Importing\DATA"
+    r"C:\Users\sasan\Downloads\MFT\DATA Importing\DAT"
 )
 _TRAIN   = _HERE / "TRAINING DATA"          # all outputs go here; never touches DAT/
 

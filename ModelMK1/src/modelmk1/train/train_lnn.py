@@ -1,30 +1,18 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import argparse
 import logging
-<<<<<<< HEAD
-=======
 from collections.abc import Callable
->>>>>>> main
 
 import joblib
 import numpy as np
 import torch
 from sklearn.metrics import mean_absolute_error, mean_squared_error
-<<<<<<< HEAD
-from sklearn.preprocessing import StandardScaler
-from torch import nn
-from torch.utils.data import DataLoader
-
-from modelmk1.common.paths import get_app_paths, resolve_data_file
-from modelmk1.common.runtime import pick_device, set_seed, write_json
-from modelmk1.data.loader import TickDataset, build_supervised_data, load_tick_df, resample_ticks
-=======
 from torch import nn
 from torch.utils.data import DataLoader
 
 from modelmk1.eval.cpcv import CPCVConfig, evaluate_cpcv_distribution
-from modelmk1.eval.backtest import directional_accuracy
+from modelmk1.eval.backtest import directional_accuracy, sharpe_ratio
 from modelmk1.common.paths import get_app_paths, resolve_data_file
 from modelmk1.common.runtime import (
     ModelEMA,
@@ -41,15 +29,15 @@ from modelmk1.data.loader import (
     prepare_split,
     resample_ticks,
 )
->>>>>>> main
 from modelmk1.models.lnn_model import MarketLNN
 
 
 logger = logging.getLogger(__name__)
 
-<<<<<<< HEAD
-=======
-EpochProgressCallback = Callable[[int, float, float, float, float], None]
+EpochProgressCallback = Callable[[int, float, float, float, float, float], None]
+
+
+_ANNUALIZATION_1MIN = 252.0 * 375.0
 
 
 class DirectionalHuberLoss(nn.Module):
@@ -69,7 +57,6 @@ class DirectionalHuberLoss(nn.Module):
 # ---------------------------------------------------------------------------
 # Training / evaluation loops
 # ---------------------------------------------------------------------------
->>>>>>> main
 
 def _train_epoch(
     model: nn.Module,
@@ -77,45 +64,6 @@ def _train_epoch(
     optimizer: torch.optim.Optimizer,
     criterion: nn.Module,
     device: torch.device,
-<<<<<<< HEAD
-    scaler: torch.amp.GradScaler,
-) -> float:
-    model.train()
-    total = 0.0
-    for x_batch, y_batch in loader:
-        x_batch = x_batch.to(device)
-        y_batch = y_batch.to(device)
-        optimizer.zero_grad(set_to_none=True)
-        with torch.amp.autocast(device_type=device.type, enabled=(device.type == "cuda")):
-            pred = model(x_batch)
-            loss = criterion(pred, y_batch)
-        scaler.scale(loss).backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-        scaler.step(optimizer)
-        scaler.update()
-        total += loss.item() * len(y_batch)
-    return total / len(loader.dataset)
-
-
-@torch.no_grad()
-def _evaluate(model: nn.Module, loader: DataLoader, criterion: nn.Module, device: torch.device) -> tuple[float, np.ndarray, np.ndarray]:
-    model.eval()
-    total = 0.0
-    preds: list[np.ndarray] = []
-    targets: list[np.ndarray] = []
-    for x_batch, y_batch in loader:
-        x_batch = x_batch.to(device)
-        y_batch = y_batch.to(device)
-        pred = model(x_batch)
-        loss = criterion(pred, y_batch)
-        total += loss.item() * len(y_batch)
-        preds.append(pred.detach().cpu().numpy().reshape(-1))
-        targets.append(y_batch.detach().cpu().numpy().reshape(-1))
-    return total / len(loader.dataset), np.concatenate(preds), np.concatenate(targets)
-
-
-def run_training(args: argparse.Namespace) -> dict:
-=======
     scaler: torch.cuda.amp.GradScaler,
     grad_clip: float = 1.0,
     ema: ModelEMA | None = None,
@@ -176,7 +124,6 @@ def _evaluate(
 # ---------------------------------------------------------------------------
 
 def run_training(args: argparse.Namespace, on_epoch_end: EpochProgressCallback | None = None) -> dict:
->>>>>>> main
     set_seed(args.seed)
     device = pick_device(force_cpu=args.cpu)
 
@@ -185,24 +132,6 @@ def run_training(args: argparse.Namespace, on_epoch_end: EpochProgressCallback |
     sampled = resample_ticks(df, freq=args.resample_freq)
     bundle = build_supervised_data(sampled, seq_len=args.seq_len, horizon=args.horizon, include_stoch_rsi=True)
 
-<<<<<<< HEAD
-    split = int(0.8 * len(bundle.targets))
-    x_train, x_val = bundle.sequences[:split], bundle.sequences[split:]
-    y_train, y_val = bundle.targets[:split], bundle.targets[split:]
-
-    scaler = StandardScaler()
-    x_train_scaled = scaler.fit_transform(x_train.reshape(-1, x_train.shape[-1])).reshape(x_train.shape)
-    x_val_scaled = scaler.transform(x_val.reshape(-1, x_val.shape[-1])).reshape(x_val.shape)
-
-    train_loader = DataLoader(TickDataset(x_train_scaled, y_train), batch_size=args.batch_size, shuffle=True, num_workers=0)
-    val_loader = DataLoader(TickDataset(x_val_scaled, y_val), batch_size=args.batch_size, shuffle=False, num_workers=0)
-
-    model = MarketLNN(input_size=x_train.shape[-1], hidden_size=args.hidden_size, output_size=1, dropout=args.dropout).to(device)
-    criterion = nn.HuberLoss(delta=1.0)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.5, patience=3)
-    amp_scaler = torch.amp.GradScaler(enabled=(device.type == "cuda"))
-=======
     split = prepare_split(bundle, train_ratio=0.8)
 
     train_loader = DataLoader(
@@ -251,7 +180,6 @@ def run_training(args: argparse.Namespace, on_epoch_end: EpochProgressCallback |
 
     use_ema = getattr(args, "use_ema", True)
     ema = ModelEMA(model, decay=getattr(args, "ema_decay", 0.999)) if use_ema else None
->>>>>>> main
 
     paths = get_app_paths()
     model_dir = paths.outputs / "model"
@@ -264,11 +192,6 @@ def run_training(args: argparse.Namespace, on_epoch_end: EpochProgressCallback |
     val_target = np.array([])
 
     for epoch in range(1, args.epochs + 1):
-<<<<<<< HEAD
-        train_loss = _train_epoch(model, train_loader, optimizer, criterion, device, amp_scaler)
-        val_loss, val_pred, val_target = _evaluate(model, val_loader, criterion, device)
-        scheduler.step(val_loss)
-=======
         train_loss = _train_epoch(
             model, train_loader, optimizer, criterion, device, amp_scaler,
             grad_clip=getattr(args, "grad_clip_norm", 1.0),
@@ -289,21 +212,14 @@ def run_training(args: argparse.Namespace, on_epoch_end: EpochProgressCallback |
             scheduler.step()
 
         dir_acc = directional_accuracy(val_target, val_pred)
->>>>>>> main
+        strategy_direction = np.where(val_pred >= 0.0, 1.0, -1.0)
+        strategy_returns = strategy_direction * val_target
+        epoch_sharpe = sharpe_ratio(strategy_returns, annualization=_ANNUALIZATION_1MIN)
 
         if val_loss < best_loss:
             best_loss = val_loss
             best_epoch = epoch
             patience = 0
-<<<<<<< HEAD
-            torch.save(
-                {
-                    "model_state_dict": model.state_dict(),
-                    "feature_columns": bundle.feature_columns,
-                    "input_size": x_train.shape[-1],
-                    "hidden_size": args.hidden_size,
-                    "dropout": args.dropout,
-=======
 
             save_state = model.state_dict()
             if ema is not None:
@@ -326,43 +242,30 @@ def run_training(args: argparse.Namespace, on_epoch_end: EpochProgressCallback |
                     "mamba_d_state": getattr(args, "mamba_d_state", 16),
                     "mamba_d_conv": getattr(args, "mamba_d_conv", 4),
                     "mamba_expand": getattr(args, "mamba_expand", 2),
->>>>>>> main
                     "seq_len": args.seq_len,
                     "horizon": args.horizon,
                     "resample_freq": args.resample_freq,
                 },
                 model_dir / "lnn_best.pt",
             )
-<<<<<<< HEAD
-            joblib.dump(scaler, model_dir / "lnn_scaler.joblib")
-        else:
-            patience += 1
-
-        logger.info(
-            "Epoch %s/%s | train=%.6f | val=%.6f | device=%s",
-            epoch,
-            args.epochs,
-            train_loss,
-            val_loss,
-            device.type,
-        )
-        if device.type == "cuda":
-            torch.cuda.empty_cache()
-        if patience >= args.early_stopping_patience:
-            break
-
-=======
             joblib.dump(split.scaler, model_dir / "lnn_scaler.joblib")
         else:
             patience += 1
 
         current_lr = optimizer.param_groups[0]["lr"]
         logger.info(
-            "Epoch %s/%s | train=%.6f | val=%.6f | dir_acc=%.3f | lr=%.2e | device=%s",
-            epoch, args.epochs, train_loss, val_loss, dir_acc, current_lr, device.type,
+            "Epoch %s/%s | train=%.6f | val=%.6f | dir_acc=%.3f | sharpe=%.3f | lr=%.2e | device=%s",
+            epoch, args.epochs, train_loss, val_loss, dir_acc, epoch_sharpe, current_lr, device.type,
         )
         if on_epoch_end is not None:
-            on_epoch_end(epoch, float(train_loss), float(val_loss), float(dir_acc), float(current_lr))
+            on_epoch_end(
+                epoch,
+                float(train_loss),
+                float(val_loss),
+                float(dir_acc),
+                float(epoch_sharpe),
+                float(current_lr),
+            )
         if device.type == "cuda":
             torch.cuda.empty_cache()
         if patience >= args.early_stopping_patience:
@@ -400,23 +303,17 @@ def run_training(args: argparse.Namespace, on_epoch_end: EpochProgressCallback |
         ),
     )
 
->>>>>>> main
     metrics = {
         "best_val_loss": float(best_loss),
         "best_epoch": best_epoch,
         "val_mse": float(mean_squared_error(val_target, val_pred)),
         "val_mae": float(mean_absolute_error(val_target, val_pred)),
-<<<<<<< HEAD
-=======
         "val_directional_accuracy": directional_accuracy(val_target, val_pred),
         "cpcv": cpcv_summary,
->>>>>>> main
         "device": device.type,
         "dataset": str(dataset_path),
     }
     write_json(model_dir / "lnn_metrics.json", metrics)
-<<<<<<< HEAD
-=======
 
     del best_model
     del model
@@ -425,7 +322,6 @@ def run_training(args: argparse.Namespace, on_epoch_end: EpochProgressCallback |
     if device.type == "cuda":
         torch.cuda.empty_cache()
 
->>>>>>> main
     return metrics
 
 
@@ -444,8 +340,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--early-stopping-patience", type=int, default=5)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--cpu", action="store_true")
-<<<<<<< HEAD
-=======
     parser.add_argument("--scheduler", type=str, default="cosine", choices=["plateau", "cosine", "cosine_warm"])
     parser.add_argument("--warmup-epochs", type=int, default=2)
     parser.add_argument("--num-heads", type=int, default=4)
@@ -461,7 +355,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-ema", dest="use_ema", action="store_false")
     parser.add_argument("--ema-decay", type=float, default=0.999)
     parser.add_argument("--grad-clip-norm", type=float, default=1.0)
->>>>>>> main
     return parser
 
 

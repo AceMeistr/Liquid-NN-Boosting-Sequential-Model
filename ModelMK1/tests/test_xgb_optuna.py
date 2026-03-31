@@ -6,7 +6,6 @@ import numpy as np
 import pandas as pd
 
 from modelmk1.models.xgb_spectral import load_constituent_price_panel
-from modelmk1.tuning.optuna_xgb_spectral import _build_sqlite_storage_url, _parse_tickers
 
 
 def _write_nested_price_parquet(path: Path, seed: int) -> None:
@@ -39,15 +38,3 @@ def test_load_constituent_price_panel_supports_nested_directory(tmp_path: Path) 
 
     assert len(market) > 500
     assert {"timestamp", "price", "high", "low", "volume"}.issubset(set(market.columns))
-
-
-def test_build_sqlite_storage_url_normalizes_windows_path() -> None:
-    raw = r"C:\\repo\\ModelMK1\\outputs\\model\\optuna_xgb_study.db"
-    storage = _build_sqlite_storage_url(raw)
-    assert storage == "sqlite:///C:/repo/ModelMK1/outputs/model/optuna_xgb_study.db"
-
-
-def test_parse_tickers_returns_clean_values() -> None:
-    assert _parse_tickers("  rsi_14 , macd_hist,vol_z_20 ,, ") == ["rsi_14", "macd_hist", "vol_z_20"]
-    assert _parse_tickers(None) is None
-    assert _parse_tickers(" , , ") is None

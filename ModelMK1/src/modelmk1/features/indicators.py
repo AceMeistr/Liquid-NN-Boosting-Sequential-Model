@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import logging
 
@@ -9,11 +9,8 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 
-<<<<<<< HEAD
-=======
 # ========================  BASIC INDICATORS  ========================
 
->>>>>>> main
 def sma(series: pd.Series, window: int) -> pd.Series:
     return series.rolling(window=window, min_periods=window).mean()
 
@@ -56,9 +53,6 @@ def bollinger_bands(series: pd.Series, window: int = 20, k: float = 2.0) -> pd.D
     upper = mid + k * std
     lower = mid - k * std
     width = (upper - lower) / (mid + 1e-12)
-<<<<<<< HEAD
-    return pd.DataFrame({"bb_mid": mid, "bb_upper": upper, "bb_lower": lower, "bb_width": width})
-=======
     pct_b = (series - lower) / (upper - lower + 1e-12)
     return pd.DataFrame({"bb_mid": mid, "bb_upper": upper, "bb_lower": lower, "bb_width": width, "bb_pct_b": pct_b})
 
@@ -103,7 +97,6 @@ def shannon_entropy(series: pd.Series, window: int = 20, num_bins: int = 10) -> 
         
     return series.rolling(window=window, min_periods=window).apply(_compute_entropy, raw=True)
 
->>>>>>> main
 
 
 def stoch_rsi(series: pd.Series, window: int = 14, smooth_k: int = 3, smooth_d: int = 3) -> pd.DataFrame:
@@ -116,31 +109,6 @@ def stoch_rsi(series: pd.Series, window: int = 14, smooth_k: int = 3, smooth_d: 
     return pd.DataFrame({"stoch_rsi": stoch, "stoch_rsi_k": stoch_k, "stoch_rsi_d": stoch_d})
 
 
-<<<<<<< HEAD
-def get_feature_schema(include_stoch_rsi: bool = True) -> list[str]:
-    base = [
-        "price",
-        "high",
-        "low",
-        "volume",
-        "sma_14",
-        "sma_50",
-        "ema_12",
-        "ema_26",
-        "rsi_14",
-        "macd",
-        "macd_signal",
-        "macd_hist",
-        "atr_14",
-        "bb_mid",
-        "bb_upper",
-        "bb_lower",
-        "bb_width",
-        "ret_1",
-        "ret_5",
-        "ret_20",
-        "vol_z_20",
-=======
 # ========================  ADVANCED INDICATORS  ========================
 
 def vwap(df: pd.DataFrame, window: int = 20) -> pd.Series:
@@ -233,23 +201,18 @@ def get_feature_schema(include_stoch_rsi: bool = True) -> list[str]:
         # Returns & momentum
         "ret_1", "ret_5", "ret_20",
         "momentum_10", "momentum_30",
+        "price_sma_ratio",
         # Volume z-score
         "vol_z_20",
         # Advanced Math / Forward-Looking
         "kalman_price", "price_kalman_ratio",
         "entropy_20",
->>>>>>> main
     ]
     if include_stoch_rsi:
         return [*base, "stoch_rsi", "stoch_rsi_k", "stoch_rsi_d"]
     return base
 
 
-<<<<<<< HEAD
-def add_all_indicators(df: pd.DataFrame, include_stoch_rsi: bool = True) -> pd.DataFrame:
-    out = df.copy()
-    start_rows = len(out)
-=======
 # ========================  FEATURE BUILDER  ========================
 
 def add_all_indicators(df: pd.DataFrame, include_stoch_rsi: bool = True) -> pd.DataFrame:
@@ -257,34 +220,10 @@ def add_all_indicators(df: pd.DataFrame, include_stoch_rsi: bool = True) -> pd.D
     start_rows = len(out)
 
     # --- Moving averages ---
->>>>>>> main
     out["sma_14"] = sma(out["price"], 14)
     out["sma_50"] = sma(out["price"], 50)
     out["ema_12"] = ema(out["price"], 12)
     out["ema_26"] = ema(out["price"], 26)
-<<<<<<< HEAD
-    out["rsi_14"] = rsi(out["price"], 14)
-
-    macd_df = macd(out["price"], 12, 26, 9)
-    for col in macd_df.columns:
-        out[col] = macd_df[col]
-
-    out["atr_14"] = atr(out, 14)
-    bb_df = bollinger_bands(out["price"], 20, 2.0)
-    for col in bb_df.columns:
-        out[col] = bb_df[col]
-
-    if include_stoch_rsi:
-        srsi_df = stoch_rsi(out["price"], 14, 3, 3)
-        for col in srsi_df.columns:
-            out[col] = srsi_df[col]
-
-    out["ret_1"] = out["price"].pct_change(1)
-    out["ret_5"] = out["price"].pct_change(5)
-    out["ret_20"] = out["price"].pct_change(20)
-    out["vol_z_20"] = (out["volume"] - out["volume"].rolling(20).mean()) / (out["volume"].rolling(20).std() + 1e-12)
-
-=======
 
     # --- RSI ---
     out["rsi_14"] = rsi(out["price"], 14)
@@ -326,6 +265,7 @@ def add_all_indicators(df: pd.DataFrame, include_stoch_rsi: bool = True) -> pd.D
     out["ret_20"] = out["price"].pct_change(20)
     out["momentum_10"] = price_momentum(out["price"], 10)
     out["momentum_30"] = price_momentum(out["price"], 30)
+    out["price_sma_ratio"] = out["price"] / (out["sma_50"] + 1e-12)
 
     # --- Volume z-score ---
     out["vol_z_20"] = (out["volume"] - out["volume"].rolling(20).mean()) / (out["volume"].rolling(20).std() + 1e-12)
@@ -340,7 +280,6 @@ def add_all_indicators(df: pd.DataFrame, include_stoch_rsi: bool = True) -> pd.D
     out["entropy_20"] = shannon_entropy(log_returns, window=20)
 
     # --- Final sanitation ---
->>>>>>> main
     out = out.replace([np.inf, -np.inf], np.nan)
     out = out.dropna().reset_index(drop=True)
     dropped = start_rows - len(out)

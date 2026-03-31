@@ -1,4 +1,4 @@
-# ModelMK1
+﻿# ModelMK1
 
 Standalone Liquid NN + XGBoost hybrid for market range prediction.
 
@@ -12,10 +12,10 @@ Standalone Liquid NN + XGBoost hybrid for market range prediction.
 
 ## Folder structure
 
-- `main.py` — one entrypoint for build/tune/train/predict/backtest
-- `src/modelmk1/` — all source code modules
-- `Training Data/` — place training CSV/Parquet files here
-- `outputs/` — generated model artifacts and metrics
+- `main.py` â€” one entrypoint for build/tune/train/predict/backtest
+- `src/modelmk1/` â€” all source code modules
+- `Training Data/` â€” place training CSV/Parquet files here
+- `outputs/` â€” generated model artifacts and metrics
 
 ## Required dataset columns
 
@@ -49,8 +49,6 @@ cd ModelMK1
 /bin/python3 main.py pipeline --data-path "./Training Data/sensex_ticks.parquet" --trials 30
 ```
 
-<<<<<<< HEAD
-=======
 Route J (Dynamic Correlation Graph + T-GCN):
 
 ```bash
@@ -77,7 +75,6 @@ Spectral route outputs are saved to `outputs/model/`:
 - `xgb_spectral_top10.json`
 - `xgb_spectral_metrics.json`
 
->>>>>>> main
 Prediction and evaluation:
 
 ```bash

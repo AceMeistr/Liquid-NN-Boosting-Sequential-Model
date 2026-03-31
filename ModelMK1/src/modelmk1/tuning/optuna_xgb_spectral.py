@@ -11,16 +11,64 @@ from optuna.trial import TrialState
 import pandas as pd
 
 from modelmk1.common.paths import get_app_paths, resolve_data_file
-from modelmk1.common.runtime import write_json, build_sqlite_storage_url, is_cuda_oom
+from modelmk1.common.runtime import write_json, build_optuna_rdb_storage, build_sqlite_storage_url, is_cuda_oom
 from modelmk1.models.xgb_spectral import (
     build_latest_correlation_spectral,
     build_spectral_training_matrices,
     load_constituent_price_panel,
     train_xgb_with_dmatrix,
 )
+from modelmk1.tuning.plateau import compute_plateau_penalty
 
 
 logger = logging.getLogger(__name__)
+_DEFAULT_PRUNER = "median"
+_SUPPORTED_PRUNERS = ("median", "hyperband")
+_PLATEAU_MAX_NEIGHBORS = 8
+_PLATEAU_MIN_LOCAL_NEIGHBORS = 4
+_PLATEAU_RADIUS = 0.30
+_PLATEAU_GRACE_TRIALS = 12
+_PLATEAU_CLIFF_WEIGHT = 0.35
+_PLATEAU_SPREAD_WEIGHT = 0.10
+_TARGET_SHARPE_MIN = 2.0
+_TARGET_DIRECTIONAL_ACC = 0.52
+_TARGET_PBO_MAX = 0.20
+_PBO_SHARPE_TANDEM_WEIGHT = 2.00
+
+
+def _build_pruner(pruner_name: str) -> optuna.pruners.BasePruner:
+    name = str(pruner_name).strip().lower()
+    if name == "median":
+        return optuna.pruners.MedianPruner(n_startup_trials=5, n_warmup_steps=0, interval_steps=1)
+    if name == "hyperband":
+        return optuna.pruners.HyperbandPruner(min_resource=1, max_resource=1300, reduction_factor=3)
+    raise ValueError(f"Unsupported pruner '{pruner_name}'. Supported values: {', '.join(_SUPPORTED_PRUNERS)}")
+
+
+def _build_sqlite_storage_url(db_path: str) -> str:
+    """Compatibility wrapper used by tests and external callers."""
+    return build_sqlite_storage_url(db_path)
+
+
+def _parse_tickers(tickers_raw: str | None) -> list[str] | None:
+    if not tickers_raw:
+        return None
+    tickers = [t.strip() for t in tickers_raw.split(",") if t.strip()]
+    return tickers or None
+
+
+def _effective_sharpe_with_pbo(raw_sharpe: float, pbo_proxy: float) -> tuple[float, float, float]:
+    if not isinstance(raw_sharpe, (int, float)):
+        raw_sharpe = 0.0
+    if not isinstance(pbo_proxy, (int, float)):
+        pbo_proxy = 1.0
+
+    raw = float(raw_sharpe)
+    pbo = float(min(max(float(pbo_proxy), 0.0), 1.0))
+    pbo_excess = max(pbo - _TARGET_PBO_MAX, 0.0)
+    pbo_sharpe_penalty = pbo_excess * _PBO_SHARPE_TANDEM_WEIGHT
+    effective_sharpe = raw - pbo_sharpe_penalty
+    return float(effective_sharpe), float(pbo_sharpe_penalty), float(pbo)
 
 
 
@@ -68,6 +116,8 @@ def _write_runtime_checkpoint(study: optuna.Study, db_path: str) -> None:
         payload["best_score"] = float(study.best_value)
         payload["best_params"] = best.params
         payload["best_sharpe_ratio"] = float(best.user_attrs.get("val_sharpe_ratio", 0.0))
+        payload["best_effective_sharpe"] = float(best.user_attrs.get("effective_sharpe_for_objective", 0.0))
+        payload["best_pbo_proxy"] = float(best.user_attrs.get("val_pbo_proxy", 1.0))
         payload["best_directional_accuracy"] = float(best.user_attrs.get("val_directional_accuracy", 0.0))
         payload["best_meets_target"] = bool(best.user_attrs.get("meets_target", False))
 
@@ -75,15 +125,16 @@ def _write_runtime_checkpoint(study: optuna.Study, db_path: str) -> None:
 
 
 def _trial_score(metrics: dict[str, Any]) -> float:
-    sharpe = float(metrics.get("val_sharpe_ratio", 0.0))
+    raw_sharpe = float(metrics.get("val_sharpe_ratio", 0.0))
+    effective_sharpe, _, _ = _effective_sharpe_with_pbo(raw_sharpe, float(metrics.get("val_pbo_proxy", 1.0)))
     direction = float(metrics.get("val_directional_accuracy", 0.0))
 
-    # Prioritize Sharpe while enforcing directional edge.
-    score = sharpe + (direction - 0.5) * 8.0
-    if direction < 0.52:
-        score -= (0.52 - direction) * 30.0
-    if sharpe < 2.0:
-        score -= (2.0 - sharpe) * 3.0
+    # PBO is coupled to Sharpe only (tandem), not added as a separate global term.
+    score = effective_sharpe + (direction - 0.5) * 8.0
+    if direction < _TARGET_DIRECTIONAL_ACC:
+        score -= (_TARGET_DIRECTIONAL_ACC - direction) * 30.0
+    if effective_sharpe < _TARGET_SHARPE_MIN:
+        score -= (_TARGET_SHARPE_MIN - effective_sharpe) * 3.0
     return float(score)
 
 
@@ -216,14 +267,20 @@ def run_optuna_xgb_spectral(
     study_name: str,
     jobs: int,
     tickers_raw: str | None,
+    pruner: str = _DEFAULT_PRUNER,
+    storage_url: str | None = None,
+    storage_db_path: str | None = None,
 ) -> dict[str, Any]:
     dataset_path = resolve_data_file(data_path)
     model_dir = get_app_paths().outputs / "model"
     model_dir.mkdir(parents=True, exist_ok=True)
-    db_path = str((model_dir / "optuna_xgb_study.db").resolve())
-    indicator_names = None
-    if tickers_raw:
-        indicator_names = [t.strip() for t in tickers_raw.split(",") if t.strip()] or None
+    db_file = Path(storage_db_path).expanduser() if storage_db_path else (model_dir / "optuna_xgb_study.db")
+    if not db_file.is_absolute():
+        db_file = (Path.cwd() / db_file).resolve()
+    db_path = str(db_file.resolve())
+    storage_reference = str(storage_url).strip() if storage_url else db_path
+    storage_backend = build_optuna_rdb_storage(db_path=db_path, storage_url=storage_url)
+    indicator_names = _parse_tickers(tickers_raw)
 
     logger.info("Loading market frame for classification XGBoost Optuna from %s", dataset_path)
     market_frame = load_constituent_price_panel(dataset_path)
@@ -269,24 +326,54 @@ def run_optuna_xgb_spectral(
 
         sharpe = float(metrics.get("val_sharpe_ratio", 0.0))
         direction = float(metrics.get("val_directional_accuracy", 0.0))
-        meets_target = bool(sharpe >= 2.0 and direction >= 0.52)
-        score = _trial_score(metrics)
+        effective_sharpe, pbo_sharpe_penalty, pbo_proxy = _effective_sharpe_with_pbo(
+            sharpe,
+            float(metrics.get("val_pbo_proxy", 1.0)),
+        )
+        meets_target = bool(effective_sharpe >= _TARGET_SHARPE_MIN and direction > _TARGET_DIRECTIONAL_ACC)
+        base_score = _trial_score(metrics)
+        plateau = compute_plateau_penalty(
+            study=trial.study,
+            current_params=trial.params,
+            current_trial_number=trial.number,
+            base_score=base_score,
+            direction="maximize",
+            distributions=trial.distributions,
+            max_neighbors=_PLATEAU_MAX_NEIGHBORS,
+            min_local_neighbors=_PLATEAU_MIN_LOCAL_NEIGHBORS,
+            radius=_PLATEAU_RADIUS,
+            grace_completed_trials=_PLATEAU_GRACE_TRIALS,
+            cliff_weight=_PLATEAU_CLIFF_WEIGHT,
+            spread_weight=_PLATEAU_SPREAD_WEIGHT,
+        )
+        score = base_score - float(plateau["penalty"])
 
         trial.set_user_attr("val_sharpe_ratio", sharpe)
+        trial.set_user_attr("val_pbo_proxy", pbo_proxy)
+        trial.set_user_attr("effective_sharpe_for_objective", effective_sharpe)
+        trial.set_user_attr("pbo_sharpe_penalty", pbo_sharpe_penalty)
         trial.set_user_attr("val_directional_accuracy", direction)
         trial.set_user_attr("val_mae", float(metrics.get("val_mae", 0.0)))
         trial.set_user_attr("val_mse", float(metrics.get("val_mse", 0.0)))
         trial.set_user_attr("meets_target", meets_target)
+        trial.set_user_attr("base_objective_score", float(base_score))
+        trial.set_user_attr("plateau_penalty", float(plateau["penalty"]))
+        trial.set_user_attr("plateau_neighbor_count", int(plateau["neighbor_count"]))
+        trial.set_user_attr("plateau_neighbor_median", float(plateau["local_median"]))
+        trial.set_user_attr("plateau_neighbor_iqr", float(plateau["local_iqr"]))
+        trial.set_user_attr("plateau_cliff_gap", float(plateau["cliff_gap"]))
+        trial.set_user_attr("plateau_reason", str(plateau["reason"]))
         trial.set_user_attr("objective_score", score)
         gc.collect()
         return score
 
+    selected_pruner = str(pruner).strip().lower()
     study = optuna.create_study(
         direction="maximize",
         study_name=study_name,
         sampler=optuna.samplers.TPESampler(seed=42),
-        pruner=optuna.pruners.MedianPruner(n_startup_trials=5, n_warmup_steps=0, interval_steps=1),
-        storage=build_sqlite_storage_url(db_path),
+        pruner=_build_pruner(selected_pruner),
+        storage=storage_backend,
         load_if_exists=True,
     )
 
@@ -294,7 +381,7 @@ def run_optuna_xgb_spectral(
     existing_finished_trials = len([t for t in study.trials if t.state in finished_states])
     remaining_trials = max(trials - existing_finished_trials, 0)
 
-    _write_runtime_checkpoint(study, db_path)
+    _write_runtime_checkpoint(study, storage_reference)
 
     if remaining_trials > 0:
         study.optimize(
@@ -302,7 +389,7 @@ def run_optuna_xgb_spectral(
             n_trials=remaining_trials,
             n_jobs=max(1, int(jobs)),
             timeout=None if timeout <= 0 else timeout,
-            callbacks=[lambda s, _t: _write_runtime_checkpoint(s, db_path)],
+            callbacks=[lambda s, _t: _write_runtime_checkpoint(s, storage_reference)],
         )
     else:
         logger.info(
@@ -311,7 +398,7 @@ def run_optuna_xgb_spectral(
             existing_finished_trials,
         )
 
-    _write_runtime_checkpoint(study, db_path)
+    _write_runtime_checkpoint(study, storage_reference)
 
     complete_trials = [t for t in study.trials if t.state == TrialState.COMPLETE]
     payload: dict[str, Any] = {
@@ -319,6 +406,12 @@ def run_optuna_xgb_spectral(
         "best_params": study.best_params if complete_trials else {},
         "best_sharpe_ratio": (
             float(study.best_trial.user_attrs.get("val_sharpe_ratio", 0.0)) if complete_trials else None
+        ),
+        "best_effective_sharpe": (
+            float(study.best_trial.user_attrs.get("effective_sharpe_for_objective", 0.0)) if complete_trials else None
+        ),
+        "best_pbo_proxy": (
+            float(study.best_trial.user_attrs.get("val_pbo_proxy", 1.0)) if complete_trials else None
         ),
         "best_directional_accuracy": (
             float(study.best_trial.user_attrs.get("val_directional_accuracy", 0.0)) if complete_trials else None
@@ -329,7 +422,8 @@ def run_optuna_xgb_spectral(
         "study_name": study.study_name,
         "n_trials_completed": len(complete_trials),
         "n_trials_total": len(study.trials),
-        "storage": db_path,
+        "pruner": selected_pruner,
+        "storage": storage_reference,
     }
 
     if complete_trials:
@@ -363,6 +457,9 @@ def main() -> None:
     parser.add_argument("--data-path", type=str, default=None)
     parser.add_argument("--jobs", type=int, default=1)
     parser.add_argument("--tickers", type=str, default=None, help="Comma-separated explicit indicator names")
+    parser.add_argument("--pruner", type=str, default=_DEFAULT_PRUNER, choices=list(_SUPPORTED_PRUNERS))
+    parser.add_argument("--storage-url", type=str, default=None)
+    parser.add_argument("--storage-db-path", type=str, default=None)
     args = parser.parse_args()
     print(
         run_optuna_xgb_spectral(
@@ -372,6 +469,9 @@ def main() -> None:
             study_name=args.study_name,
             jobs=args.jobs,
             tickers_raw=args.tickers,
+            pruner=args.pruner,
+            storage_url=args.storage_url,
+            storage_db_path=args.storage_db_path,
         )
     )
 

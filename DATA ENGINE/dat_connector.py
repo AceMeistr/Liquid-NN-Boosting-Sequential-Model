@@ -197,7 +197,7 @@ def _load_bridge() -> dict | None:
     # Search for bridge_config.json in common DAT locations
     candidates = [
         Path(
-            "C:/Users/sasan/Downloads/MFT/DATA Importing/DATA/bridge_config.json"
+            "C:/Users/sasan/Downloads/MFT/DATA Importing/DAT/bridge_config.json"
         ),
     ]
     for c in candidates:

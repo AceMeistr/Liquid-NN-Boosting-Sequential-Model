@@ -1,8 +1,5 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
-<<<<<<< HEAD
-from modelmk1.features.indicators import get_feature_schema
-=======
 import numpy as np
 import pandas as pd
 
@@ -15,7 +12,6 @@ from modelmk1.features.indicators import (
     parkinson_volatility,
     vwap,
 )
->>>>>>> main
 
 
 def test_feature_schema_sizes() -> None:
@@ -25,8 +21,6 @@ def test_feature_schema_sizes() -> None:
     assert len(full) == len(base) + 3
     assert "stoch_rsi" in full
     assert "stoch_rsi" not in base
-<<<<<<< HEAD
-=======
 
 
 def test_feature_schema_has_advanced_indicators() -> None:
@@ -72,6 +66,5 @@ def test_obv_monotonic_on_constant_direction() -> None:
         "volume": np.ones(100) * 10,
     })
     result = obv(df)
-    # Price always increasing → OBV should be non-decreasing
+    # Price always increasing â†’ OBV should be non-decreasing
     assert (result.diff().dropna() >= 0).all()
->>>>>>> main

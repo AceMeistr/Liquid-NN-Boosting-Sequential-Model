@@ -13,6 +13,7 @@ import xgboost as xgb
 
 from modelmk1.data.loader import DataBundle, build_supervised_data, load_tick_df, resample_ticks
 from modelmk1.eval.backtest import sharpe_ratio
+from modelmk1.eval.cpcv import evaluate_cpcv_distribution
 
 
 logger = logging.getLogger(__name__)
@@ -363,6 +364,10 @@ def train_xgb_with_dmatrix(
     directional_accuracy = float((pred_label == y_val_cls).mean())
     strategy_direction = np.where(pred_label >= 0.5, 1.0, -1.0)
     strategy_returns = strategy_direction * y_val_returns
+    cpcv_summary = evaluate_cpcv_distribution(
+        y_true=np.asarray(y_val_returns, dtype=np.float64),
+        y_pred=(np.asarray(prob, dtype=np.float64) - decision_threshold),
+    )
 
     sharpe_raw = sharpe_ratio(strategy_returns, annualization=1.0)
     sharpe_annualized = sharpe_ratio(strategy_returns, annualization=_ANNUALIZATION_1MIN)
@@ -386,6 +391,8 @@ def train_xgb_with_dmatrix(
         "val_directional_accuracy": directional_accuracy,
         "val_sharpe_ratio": sharpe_annualized,
         "val_sharpe_ratio_raw": sharpe_raw,
+        "val_cpcv_sharpe_mean": float(cpcv_summary.get("sharpe_mean", 0.0)),
+        "val_pbo_proxy": float(cpcv_summary.get("pbo_proxy", 1.0)),
         "val_strategy_mean_return": float(np.mean(strategy_returns)),
         "val_strategy_std_return": float(np.std(strategy_returns, ddof=1)) if len(strategy_returns) > 1 else 0.0,
         "val_positive_rate": float(np.mean(y_val_cls)),

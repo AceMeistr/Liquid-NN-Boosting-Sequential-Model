@@ -1,33 +1,30 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 from dataclasses import dataclass
 import logging
+from pathlib import Path
+
+from modelmk1.common.runtime import retry
 
 
 logger = logging.getLogger(__name__)
 
-<<<<<<< HEAD
-=======
 # ---------------------------------------------------------------------------
 # DATA ENGINE location (sibling project in ~/Downloads/MFT)
 # ---------------------------------------------------------------------------
 _DATA_ENGINE_ROOT = Path("C:/Users/sasan/Downloads/MFT/DATA ENGINE")
 _DATA_ENGINE_TRAINING = _DATA_ENGINE_ROOT / "TRAINING DATA"
 
->>>>>>> main
 
 @dataclass(frozen=True)
 class AppPaths:
     root: Path
     training_data: Path
     outputs: Path
-<<<<<<< HEAD
-=======
     data_engine_root: Path
     data_engine_raw: Path
     data_engine_features: Path
     data_engine_clean: Path
->>>>>>> main
 
 
 def get_app_paths() -> AppPaths:
@@ -36,9 +33,6 @@ def get_app_paths() -> AppPaths:
     outputs = root / "outputs"
     training_data.mkdir(parents=True, exist_ok=True)
     outputs.mkdir(parents=True, exist_ok=True)
-<<<<<<< HEAD
-    return AppPaths(root=root, training_data=training_data, outputs=outputs)
-=======
 
     de_root = _DATA_ENGINE_ROOT
     de_raw = _DATA_ENGINE_TRAINING / "raw"
@@ -72,7 +66,6 @@ def discover_data_engine_parquets(
         files = files[-limit:]
     logger.info("Discovered %d parquet files in %s", len(files), folder)
     return files
->>>>>>> main
 
 
 def resolve_data_file(data_path: str | None = None) -> Path:
@@ -81,17 +74,12 @@ def resolve_data_file(data_path: str | None = None) -> Path:
         candidate = Path(data_path).expanduser().resolve()
         if candidate.exists() and candidate.is_file():
             return candidate
-<<<<<<< HEAD
-        raise FileNotFoundError(f"Provided dataset does not exist: {candidate}")
-
-=======
         if candidate.exists() and candidate.is_dir():
             # Allow pointing to a directory - return as marker for multi-file load
             return candidate
         raise FileNotFoundError(f"Provided dataset does not exist: {candidate}")
 
     # 1) Check local Training Data folder first
->>>>>>> main
     discovered = [*paths.training_data.glob("*.parquet"), *paths.training_data.glob("*.csv")]
     candidates: list[tuple[float, Path]] = []
     for item in discovered:
@@ -101,14 +89,6 @@ def resolve_data_file(data_path: str | None = None) -> Path:
         except FileNotFoundError:
             logger.warning("Skipped dataset candidate removed during scan: %s", item)
 
-<<<<<<< HEAD
-    candidates = [item for _, item in sorted(candidates, key=lambda pair: pair[0], reverse=True)]
-    if not candidates:
-        raise FileNotFoundError(
-            "No dataset found in 'Training Data'. Add CSV/Parquet and rerun."
-        )
-    return candidates[0]
-=======
     if candidates:
         result = max(candidates, key=lambda pair: pair[0])[1]
         return result
@@ -121,4 +101,3 @@ def resolve_data_file(data_path: str | None = None) -> Path:
     raise FileNotFoundError(
         "No dataset found. Place CSV/Parquet in 'Training Data' or ensure DATA ENGINE is in ~/Downloads."
     )
->>>>>>> main
