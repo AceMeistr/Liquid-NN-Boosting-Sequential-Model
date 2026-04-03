@@ -129,6 +129,19 @@ def _select_indicator_subset(
     return selected_indices.astype(np.int64), selected_names
 
 
+def _max_drawdown_ratio(returns: np.ndarray) -> float:
+    series = np.asarray(returns, dtype=np.float64).reshape(-1)
+    if series.size == 0:
+        return 0.0
+    equity = np.cumprod(1.0 + series)
+    peak = np.maximum.accumulate(equity)
+    drawdown = 1.0 - (equity / np.maximum(peak, 1e-12))
+    max_dd = float(np.max(drawdown)) if drawdown.size else 0.0
+    if not np.isfinite(max_dd):
+        return 1.0
+    return float(max(max_dd, 0.0))
+
+
 def _scaled_selected_indicators(
     bundle: DataBundle,
     top_n: int,
@@ -411,3 +424,140 @@ def train_xgb_with_dmatrix(
         mae,
     )
     return booster, metrics
+
+
+def train_xgb_walk_forward(
+    dataset: SpectralDataset,
+    n_splits: int = 5,
+    min_train_ratio: float = 0.50,
+    num_boost_round: int = 700,
+    early_stopping_rounds: int = 50,
+    params: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Anchored expanding walk-forward evaluation for XGBoost spectral.
+
+    Each fold:
+      - Train on [0 .. train_end] (expanding anchor, scaler fit on training portion only)
+      - Validate on [train_end .. test_end]
+    Returns aggregate metrics: 5th-percentile Sharpe (worst-case regime robustness),
+    mean Sharpe, mean directional accuracy, and per-fold breakdown.
+    """
+    total = len(dataset.targets)
+    if total < 100:
+        raise ValueError("Need at least 100 samples for walk-forward evaluation")
+
+    min_train = int(total * min_train_ratio)
+    available_test = total - min_train
+    fold_test_size = max(available_test // n_splits, 10)
+
+    fold_sharpes: list[float] = []
+    fold_dir_accs: list[float] = []
+    fold_losses: list[float] = []
+    fold_drawdowns: list[float] = []
+
+    for i in range(n_splits):
+        train_end = min_train + i * fold_test_size
+        test_end = min(train_end + fold_test_size, total)
+
+        if train_end >= total or test_end <= train_end:
+            break
+
+        x_train_raw = dataset.features[:train_end]
+        x_val_raw = dataset.features[train_end:test_end]
+        y_train_cls = dataset.labels[:train_end]
+        y_val_cls = dataset.labels[train_end:test_end]
+        y_val_returns = dataset.targets[train_end:test_end]
+
+        if len(y_val_cls) < 10:
+            break
+
+        # Fit scaler on training portion only - prevents data leakage
+        fold_scaler = RobustScaler(with_centering=True, with_scaling=True)
+        x_train = fold_scaler.fit_transform(x_train_raw).astype(np.float32)
+        x_val = fold_scaler.transform(x_val_raw).astype(np.float32)
+
+        dtrain = xgb.DMatrix(x_train, label=y_train_cls, feature_names=dataset.feature_names)
+        dval = xgb.DMatrix(x_val, label=y_val_cls, feature_names=dataset.feature_names)
+
+        pos = float(np.sum(y_train_cls == 1.0))
+        neg = float(np.sum(y_train_cls == 0.0))
+        scale_pos_weight = neg / max(pos, 1.0)
+
+        defaults: dict[str, Any] = {
+            "objective": "binary:logistic",
+            "eval_metric": ["logloss", "auc"],
+            "eta": 0.03,
+            "max_depth": 5,
+            "subsample": 0.9,
+            "colsample_bytree": 0.9,
+            "min_child_weight": 2.0,
+            "lambda": 1.0,
+            "alpha": 1e-3,
+            "gamma": 0.05,
+            "max_bin": 512,
+            "scale_pos_weight": scale_pos_weight,
+            "tree_method": "gpu_hist",
+            "device": "cuda",
+            "seed": 42,
+        }
+        if params:
+            defaults.update({k: v for k, v in params.items() if k != "decision_threshold"})
+
+        decision_threshold = float(np.clip(
+            float((params or {}).get("decision_threshold", 0.5)), 0.35, 0.65
+        ))
+
+        try:
+            booster = xgb.train(
+                params=defaults,
+                dtrain=dtrain,
+                num_boost_round=num_boost_round,
+                evals=[(dval, "val")],
+                early_stopping_rounds=early_stopping_rounds,
+                verbose_eval=False,
+            )
+        except xgb.core.XGBoostError:
+            fallback = dict(defaults)
+            fallback["tree_method"] = "hist"
+            booster = xgb.train(
+                params=fallback,
+                dtrain=dtrain,
+                num_boost_round=num_boost_round,
+                evals=[(dval, "val")],
+                early_stopping_rounds=early_stopping_rounds,
+                verbose_eval=False,
+            )
+
+        prob = booster.predict(dval)
+        pred_label = (prob >= decision_threshold).astype(np.float32)
+        dir_acc = float((pred_label == y_val_cls).mean())
+        strategy_returns = np.where(pred_label >= 0.5, 1.0, -1.0) * y_val_returns
+        fold_sharpe = float(sharpe_ratio(strategy_returns, annualization=_ANNUALIZATION_1MIN))
+        fold_loss = float(mean_squared_error(y_val_cls, prob))
+        fold_drawdown = _max_drawdown_ratio(strategy_returns)
+
+        fold_sharpes.append(fold_sharpe)
+        fold_dir_accs.append(dir_acc)
+        fold_losses.append(fold_loss)
+        fold_drawdowns.append(fold_drawdown)
+
+        logger.debug(
+            "Walk-forward fold %d/%d | sharpe=%.3f | dir_acc=%.3f | train=%d val=%d",
+            i + 1, n_splits, fold_sharpe, dir_acc, train_end, test_end - train_end,
+        )
+
+    if not fold_sharpes:
+        raise ValueError("Walk-forward produced no valid folds")
+
+    arr = np.array(fold_sharpes, dtype=np.float64)
+    return {
+        "wf_sharpe_p5": float(np.percentile(arr, 5)),
+        "wf_sharpe_mean": float(np.mean(arr)),
+        "wf_sharpe_std": float(np.std(arr, ddof=1)) if len(arr) > 1 else 0.0,
+        "wf_dir_acc_mean": float(np.mean(fold_dir_accs)),
+        "wf_loss_mean": float(np.mean(fold_losses)),
+        "wf_max_drawdown_ratio": float(np.max(fold_drawdowns)) if fold_drawdowns else 0.0,
+        "wf_n_folds": len(fold_sharpes),
+        "wf_fold_sharpes": [float(s) for s in fold_sharpes],
+        "wf_fold_drawdowns": [float(v) for v in fold_drawdowns],
+    }

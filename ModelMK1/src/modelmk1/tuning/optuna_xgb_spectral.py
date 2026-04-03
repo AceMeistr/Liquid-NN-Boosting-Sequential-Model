@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import gc
 import logging
+import math
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +18,7 @@ from modelmk1.models.xgb_spectral import (
     build_spectral_training_matrices,
     load_constituent_price_panel,
     train_xgb_with_dmatrix,
+    train_xgb_walk_forward,
 )
 from modelmk1.tuning.plateau import compute_plateau_penalty
 
@@ -34,6 +36,7 @@ _TARGET_SHARPE_MIN = 2.0
 _TARGET_DIRECTIONAL_ACC = 0.52
 _TARGET_PBO_MAX = 0.20
 _PBO_SHARPE_TANDEM_WEIGHT = 2.00
+_MAX_DRAWDOWN_GUARD = 0.25
 
 
 def _build_pruner(pruner_name: str) -> optuna.pruners.BasePruner:
@@ -119,6 +122,7 @@ def _write_runtime_checkpoint(study: optuna.Study, db_path: str) -> None:
         payload["best_effective_sharpe"] = float(best.user_attrs.get("effective_sharpe_for_objective", 0.0))
         payload["best_pbo_proxy"] = float(best.user_attrs.get("val_pbo_proxy", 1.0))
         payload["best_directional_accuracy"] = float(best.user_attrs.get("val_directional_accuracy", 0.0))
+        payload["best_max_drawdown_ratio"] = float(best.user_attrs.get("max_drawdown_ratio", 0.0))
         payload["best_meets_target"] = bool(best.user_attrs.get("meets_target", False))
 
     write_json(model_dir / "optuna_xgb_runtime_checkpoint.json", payload)
@@ -290,7 +294,6 @@ def run_optuna_xgb_spectral(
         corr_window = trial.suggest_categorical("corr_window", [30, 45, 60, 90])
         horizon = trial.suggest_categorical("horizon", [1, 2, 3, 5])
         seq_len = trial.suggest_categorical("seq_len", [32, 48, 64, 96])
-        train_ratio = trial.suggest_float("train_ratio", 0.75, 0.9)
         num_boost_round = trial.suggest_int("num_boost_round", 300, 1300, step=100)
         early_stopping_rounds = trial.suggest_int("early_stopping_rounds", 20, 120, step=10)
         robust_q_low = trial.suggest_categorical("robust_q_low", [10, 15, 20, 25])
@@ -310,9 +313,12 @@ def run_optuna_xgb_spectral(
                 robust_quantile_low=float(robust_q_low),
                 robust_quantile_high=float(robust_q_high),
             )
-            _, metrics = train_xgb_with_dmatrix(
+            # Walk-forward CV: anchored expanding folds, scaler re-fit per fold
+            # Prune at fold-level via trial.report(step=fold_idx)
+            wf_metrics = train_xgb_walk_forward(
                 dataset,
-                train_ratio=float(train_ratio),
+                n_splits=5,
+                min_train_ratio=0.50,
                 num_boost_round=int(num_boost_round),
                 early_stopping_rounds=int(early_stopping_rounds),
                 params=_build_xgb_params(trial),
@@ -324,14 +330,33 @@ def run_optuna_xgb_spectral(
                 raise optuna.TrialPruned("Pruned after CUDA OOM") from exc
             raise
 
-        sharpe = float(metrics.get("val_sharpe_ratio", 0.0))
-        direction = float(metrics.get("val_directional_accuracy", 0.0))
-        effective_sharpe, pbo_sharpe_penalty, pbo_proxy = _effective_sharpe_with_pbo(
-            sharpe,
-            float(metrics.get("val_pbo_proxy", 1.0)),
-        )
-        meets_target = bool(effective_sharpe >= _TARGET_SHARPE_MIN and direction > _TARGET_DIRECTIONAL_ACC)
-        base_score = _trial_score(metrics)
+        sharpe = float(wf_metrics["wf_sharpe_p5"])  # 5th-percentile = worst-case regime
+        direction = float(wf_metrics["wf_dir_acc_mean"])
+        max_drawdown_ratio = float(wf_metrics.get("wf_max_drawdown_ratio", 1.0))
+
+        if (not math.isfinite(max_drawdown_ratio)) or max_drawdown_ratio > _MAX_DRAWDOWN_GUARD:
+            raise optuna.TrialPruned(
+                f"Max drawdown guard triggered: {max_drawdown_ratio:.3f} > {_MAX_DRAWDOWN_GUARD:.2f}"
+            )
+        
+        # Deflated Sharpe Multiple Testing Haircut
+        completed_trials = len([t for t in trial.study.trials if t.state == TrialState.COMPLETE])
+        gamma = 0.5772
+        e_max = math.sqrt(2 * math.log(max(completed_trials, 1))) if completed_trials > 0 else 0
+        haircut_factor = math.sqrt(max(1.0 - gamma * (e_max / max(1.0, sharpe)), 0.01))
+        deflated_sharpe = sharpe * haircut_factor
+
+        meets_target = bool(deflated_sharpe >= _TARGET_SHARPE_MIN and direction > _TARGET_DIRECTIONAL_ACC)
+        
+        # Calculate Base Score (Modified from _trial_score)
+        score = deflated_sharpe + (direction - 0.5) * 8.0
+        if direction < _TARGET_DIRECTIONAL_ACC:
+            score -= (_TARGET_DIRECTIONAL_ACC - direction) * 30.0
+        if deflated_sharpe < _TARGET_SHARPE_MIN:
+            score -= (_TARGET_SHARPE_MIN - deflated_sharpe) * 3.0
+            
+        base_score = float(score)
+
         plateau = compute_plateau_penalty(
             study=trial.study,
             current_params=trial.params,
@@ -346,15 +371,24 @@ def run_optuna_xgb_spectral(
             cliff_weight=_PLATEAU_CLIFF_WEIGHT,
             spread_weight=_PLATEAU_SPREAD_WEIGHT,
         )
-        score = base_score - float(plateau["penalty"])
+        
+        # Hard Plateau Rejection
+        if int(plateau["neighbor_count"]) >= _PLATEAU_MAX_NEIGHBORS and float(plateau["local_iqr"]) < 0.01:
+            raise optuna.TrialPruned("Trial pruned due to strict plateau trapping - forcing exploration.")
+            
+        final_score = base_score - float(plateau["penalty"])
 
         trial.set_user_attr("val_sharpe_ratio", sharpe)
-        trial.set_user_attr("val_pbo_proxy", pbo_proxy)
-        trial.set_user_attr("effective_sharpe_for_objective", effective_sharpe)
-        trial.set_user_attr("pbo_sharpe_penalty", pbo_sharpe_penalty)
+        trial.set_user_attr("val_pbo_proxy", 0.0)  # Replaced by Deflated Sharpe
+        trial.set_user_attr("effective_sharpe_for_objective", deflated_sharpe)
+        trial.set_user_attr("pbo_sharpe_penalty", 0.0)
         trial.set_user_attr("val_directional_accuracy", direction)
-        trial.set_user_attr("val_mae", float(metrics.get("val_mae", 0.0)))
-        trial.set_user_attr("val_mse", float(metrics.get("val_mse", 0.0)))
+        trial.set_user_attr("val_mae", float(wf_metrics["wf_loss_mean"]))
+        trial.set_user_attr("val_mse", float(wf_metrics["wf_loss_mean"]))
+        trial.set_user_attr("wf_sharpe_mean", float(wf_metrics["wf_sharpe_mean"]))
+        trial.set_user_attr("wf_sharpe_std", float(wf_metrics["wf_sharpe_std"]))
+        trial.set_user_attr("wf_n_folds", int(wf_metrics["wf_n_folds"]))
+        trial.set_user_attr("max_drawdown_ratio", max_drawdown_ratio)
         trial.set_user_attr("meets_target", meets_target)
         trial.set_user_attr("base_objective_score", float(base_score))
         trial.set_user_attr("plateau_penalty", float(plateau["penalty"]))
@@ -363,9 +397,9 @@ def run_optuna_xgb_spectral(
         trial.set_user_attr("plateau_neighbor_iqr", float(plateau["local_iqr"]))
         trial.set_user_attr("plateau_cliff_gap", float(plateau["cliff_gap"]))
         trial.set_user_attr("plateau_reason", str(plateau["reason"]))
-        trial.set_user_attr("objective_score", score)
+        trial.set_user_attr("objective_score", float(final_score))
         gc.collect()
-        return score
+        return float(final_score)
 
     selected_pruner = str(pruner).strip().lower()
     study = optuna.create_study(
@@ -415,6 +449,9 @@ def run_optuna_xgb_spectral(
         ),
         "best_directional_accuracy": (
             float(study.best_trial.user_attrs.get("val_directional_accuracy", 0.0)) if complete_trials else None
+        ),
+        "best_max_drawdown_ratio": (
+            float(study.best_trial.user_attrs.get("max_drawdown_ratio", 0.0)) if complete_trials else None
         ),
         "best_meets_target": (
             bool(study.best_trial.user_attrs.get("meets_target", False)) if complete_trials else False

@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import argparse
 import gc
@@ -25,6 +25,12 @@ from modelmk1.common.runtime import (
 from modelmk1.tuning.plateau import compute_plateau_penalty
 from modelmk1.train.train_lnn import build_parser as build_lnn_parser
 from modelmk1.train.train_lnn import run_training
+from modelmk1.data.loader import (
+    load_tick_df,
+    resample_ticks,
+    build_supervised_data,
+    anchored_walk_forward_splits,
+)
 
 logger = logging.getLogger(__name__)
 _CHECKPOINT_WRITE_LOCK = threading.Lock()
@@ -44,6 +50,7 @@ _PLATEAU_RADIUS = 0.30
 _PLATEAU_GRACE_TRIALS = 12
 _PLATEAU_CLIFF_WEIGHT = 0.35
 _PLATEAU_SPREAD_WEIGHT = 0.10
+_MAX_DRAWDOWN_GUARD = 0.25
 
 
 def _normalize_batch_size_choices(batch_size_choices: list[int] | tuple[int, ...] | None) -> list[int]:
@@ -325,6 +332,13 @@ def run_optuna(
     db_path = str(db_file.resolve())
     storage_reference = str(storage_url).strip() if storage_url else db_path
     storage_backend = build_optuna_rdb_storage(db_path=db_path, storage_url=storage_url)
+    
+    # Pre-load requested dataset globally for all trials in this worker
+    logger.info("Pre-loading and resampling dataset for Optuna worker: %s", dataset)
+    tmp_parser = build_lnn_parser()
+    tmp_args = tmp_parser.parse_args([])
+    df_optuna = load_tick_df(str(dataset))
+    sampled_optuna = resample_ticks(df_optuna, freq=tmp_args.resample_freq)
     batch_choices = [max(1, int(fixed_batch_size))] if fixed_batch_size is not None else _normalize_batch_size_choices(batch_size_choices)
     search_distributions = _objective_distributions(batch_choices)
     narrowed_params = [payload for payload in (narrow_from_params or []) if isinstance(payload, dict) and payload]
@@ -463,140 +477,128 @@ def run_optuna(
         args.cpu = False
         args.grad_clip_norm = 1.0
 
-        best_epoch_val = float("inf")
-        no_improve_epochs = 0
-
-        def _on_epoch_end(
-            epoch: int,
-            _train: float,
-            val: float,
-            _dir_acc: float,
-            _epoch_sharpe: float,
-            _lr: float,
-        ) -> None:
-            nonlocal best_epoch_val, no_improve_epochs
-            if val + 1e-9 < best_epoch_val:
-                best_epoch_val = val
+        bundle = build_supervised_data(sampled_optuna, seq_len=args.seq_len, horizon=args.horizon, include_stoch_rsi=True)
+        splits = list(anchored_walk_forward_splits(bundle, n_splits=5))
+        
+        all_split_sharpes = []
+        all_split_losses = []
+        all_split_dir_accs = []
+        all_split_drawdowns = []
+        
+        enable_performance_mode()
+        
+        for split_idx, split in enumerate(splits):
+            split_sharpes = []
+            
+            # Seed rotation for robustness (3 seeds)
+            for seed in [42, 137, 256]:
+                args.seed = seed
+                best_epoch_val = float("inf")
                 no_improve_epochs = 0
-            else:
-                no_improve_epochs += 1
+                
+                def _on_epoch_end(
+                    epoch: int,
+                    _train: float,
+                    val: float,
+                    _dir_acc: float,
+                    _epoch_sharpe: float,
+                    _lr: float,
+                ) -> None:
+                    nonlocal best_epoch_val, no_improve_epochs
+                    if val + 1e-9 < best_epoch_val:
+                        best_epoch_val = val
+                        no_improve_epochs = 0
+                    else:
+                        no_improve_epochs += 1
 
-            if not math.isfinite(val):
-                raise optuna.TrialPruned("Validation loss is non-finite")
+                    if not math.isfinite(val):
+                        raise optuna.TrialPruned("Validation loss is non-finite")
 
-            epoch_sharpe = float(_epoch_sharpe)
-            if not math.isfinite(epoch_sharpe):
-                epoch_sharpe = -10.0
+                    # Hard catastrophic epoch-level gates
+                    if epoch >= 2 and float(_dir_acc) < (_TARGET_DIRECTIONAL_ACC - 0.04):
+                        raise optuna.TrialPruned(f"Epoch-{epoch} directional accuracy too weak ({float(_dir_acc):.3f})")
+                    if epoch >= 2 and float(_epoch_sharpe) < (_TARGET_SHARPE_MIN - 1.5):
+                        raise optuna.TrialPruned(f"Epoch-{epoch} Sharpe too weak ({float(_epoch_sharpe):.3f})")
+                        
+                    # Let Optuna pruner inspect at split-level, so we only raise Hard Kills here.
+                
+                try:
+                    metrics = run_training(args, on_epoch_end=_on_epoch_end, split_bundle=split)
+                    
+                    cpcv = metrics.get("cpcv", {}) if isinstance(metrics.get("cpcv", {}), dict) else {}
+                    sharpe = float(cpcv.get("sharpe_mean", 0.0))
+                    val_loss = float(metrics["best_val_loss"])
+                    dir_acc = float(metrics.get("val_directional_accuracy", 0.0))
+                    max_drawdown_ratio = float(metrics.get("max_drawdown_ratio", 1.0))
 
-            # Pruning score is minimized: low loss, high accuracy, and high Sharpe are rewarded.
-            accuracy_penalty = max(_TARGET_DIRECTIONAL_ACC - float(_dir_acc), 0.0)
-            sharpe_penalty = max(_TARGET_SHARPE_MIN - epoch_sharpe, 0.0)
-            prune_score = float(val) + accuracy_penalty * 0.75 + sharpe_penalty * 0.15
-            trial.report(prune_score, step=epoch)
+                    if (not math.isfinite(max_drawdown_ratio)) or max_drawdown_ratio > _MAX_DRAWDOWN_GUARD:
+                        raise optuna.TrialPruned(
+                            f"Max drawdown guard triggered: {max_drawdown_ratio:.3f} > {_MAX_DRAWDOWN_GUARD:.2f}"
+                        )
+                    
+                    split_sharpes.append(sharpe)
+                    all_split_losses.append(val_loss)
+                    all_split_dir_accs.append(dir_acc)
+                    all_split_drawdowns.append(max_drawdown_ratio)
+                    
+                except Exception as exc:
+                    if is_cuda_oom(exc):
+                        logger.warning("Trial %d pruned due to CUDA OOM", trial.number)
+                        if torch.cuda.is_available():
+                            torch.cuda.empty_cache()
+                        gc.collect()
+                        raise optuna.TrialPruned("Pruned after CUDA OOM") from exc
+                    raise
 
-            if epoch >= 2 and float(_dir_acc) < (_TARGET_DIRECTIONAL_ACC - 0.04):
-                raise optuna.TrialPruned(
-                    f"Epoch-{epoch} directional accuracy too weak ({float(_dir_acc):.3f})"
-                )
-            if epoch >= 2 and epoch_sharpe < (_TARGET_SHARPE_MIN - 1.5):
-                raise optuna.TrialPruned(
-                    f"Epoch-{epoch} Sharpe too weak ({epoch_sharpe:.3f})"
-                )
-            if epoch >= 3 and float(_dir_acc) < (_TARGET_DIRECTIONAL_ACC - 0.02):
-                raise optuna.TrialPruned(
-                    f"Epoch-{epoch} directional accuracy not close to target ({float(_dir_acc):.3f})"
-                )
-            if epoch >= 3 and epoch_sharpe < (_TARGET_SHARPE_MIN - 1.0):
-                raise optuna.TrialPruned(
-                    f"Epoch-{epoch} Sharpe not close to target ({epoch_sharpe:.3f})"
-                )
-
-            complete_vals = [
-                float(t.user_attrs.get("best_val_loss", t.value))
-                for t in trial.study.trials
-                if t.state == TrialState.COMPLETE and t.value is not None
-            ]
-            best_complete = float(min(complete_vals)) if complete_vals else None
-
-            # Epoch 1 catastrophic gate.
-            if epoch == 1 and best_complete is not None:
-                catastrophic_threshold = max(best_complete * 4.0, 2.5e-3)
-                if val > catastrophic_threshold:
-                    raise optuna.TrialPruned(
-                        f"Epoch-1 catastrophic trial ({val:.6f} vs threshold {catastrophic_threshold:.6f})"
-                    )
-
-            # Epoch 2 competitiveness gate.
-            if epoch >= 2 and len(complete_vals) >= 3:
-                baseline = float(median(complete_vals))
-                if val > baseline * 1.5:
-                    raise optuna.TrialPruned(
-                        f"Epoch-2 uncompetitive trial ({val:.6f} vs threshold {baseline * 1.5:.6f})"
-                    )
-
-            # Multi-metric gate: prune trials that are weak across all target metrics.
-            if epoch >= 3 and len(complete_vals) >= 3:
-                baseline = float(median(complete_vals))
-                if val > baseline * 1.25 and float(_dir_acc) < _TARGET_DIRECTIONAL_ACC and epoch_sharpe < _TARGET_SHARPE_MIN:
-                    raise optuna.TrialPruned(
-                        f"Epoch-{epoch} weak on loss/accuracy/sharpe simultaneously"
-                    )
-
-            # Epoch 5 hard kill zone.
-            if epoch >= 5:
-                if no_improve_epochs >= 3:
-                    raise optuna.TrialPruned("No improvement by epoch 5 hard-kill rule")
-                if best_complete is not None and val > best_complete * 1.25:
-                    raise optuna.TrialPruned(
-                        f"Epoch-5 underperforming trial ({val:.6f} vs threshold {best_complete * 1.25:.6f})"
-                    )
-
-            # Let Optuna pruner inspect every epoch.
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            gc.collect()
+            
+            # Evaluate split robustly (average across seeds)
+            avg_split_sharpe = float(sum(split_sharpes) / len(split_sharpes))
+            all_split_sharpes.append(avg_split_sharpe)
+            
+            # Pruning score is minimized
+            accuracy_penalty = max(_TARGET_DIRECTIONAL_ACC - float(all_split_dir_accs[-1]), 0.0)
+            sharpe_penalty = max(_TARGET_SHARPE_MIN - avg_split_sharpe, 0.0)
+            prune_score = float(all_split_losses[-1]) + accuracy_penalty * 0.75 + sharpe_penalty * 0.15
+            
+            # Prune at the SPLIT level, allowing Hyperband to allocate splits dynamically
+            trial.report(prune_score, step=split_idx)
             if trial.should_prune():
-                raise optuna.TrialPruned(f"Optuna pruner cut trial at epoch {epoch}")
+                raise optuna.TrialPruned(f"Optuna pruner cut trial at split {split_idx}")
 
-        try:
-            enable_performance_mode()
-            metrics = run_training(args, on_epoch_end=_on_epoch_end)
-        except Exception as exc:  # noqa: BLE001 - convert resource failure to pruned trial
-            if is_cuda_oom(exc):
-                logger.warning("Trial %d pruned due to CUDA OOM", trial.number)
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-                gc.collect()
-                raise optuna.TrialPruned("Pruned after CUDA OOM") from exc
-            raise
+        import numpy as np
+        # Primary Objective is 5th Percentile Sharpe (Robustness across Walk-Forward Regimes)
+        percentile_5_sharpe = float(np.percentile(all_split_sharpes, 5))
+        avg_val_loss = float(np.mean(all_split_losses))
+        avg_dir_acc = float(np.mean(all_split_dir_accs))
+        worst_drawdown_ratio = float(np.max(all_split_drawdowns)) if all_split_drawdowns else 0.0
 
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-        gc.collect()
-
-        best_val_loss = float(metrics["best_val_loss"])
-        val_directional_accuracy = float(metrics.get("val_directional_accuracy", 0.0))
-        cpcv = metrics.get("cpcv", {}) if isinstance(metrics.get("cpcv", {}), dict) else {}
-        cpcv_sharpe_mean = float(cpcv.get("sharpe_mean", 0.0))
-        cpcv_pbo_proxy_raw = float(cpcv.get("pbo_proxy", 1.0))
-        effective_sharpe, pbo_sharpe_penalty, cpcv_pbo_proxy = _effective_sharpe_with_pbo(
-            cpcv_sharpe_mean,
-            cpcv_pbo_proxy_raw,
-        )
+        # Deflated Sharpe Multiple Testing Haircut
+        completed_trials = len([t for t in trial.study.trials if t.state == TrialState.COMPLETE])
+        gamma = 0.5772 # Euler-Mascheroni constant
+        # Expected max of N standard normals approximation
+        e_max = math.sqrt(2 * math.log(max(completed_trials, 1))) if completed_trials > 0 else 0
+        haircut_factor = math.sqrt(max(1.0 - gamma * (e_max / max(1.0, percentile_5_sharpe)), 0.01))
+        deflated_sharpe = percentile_5_sharpe * haircut_factor
 
         penalty = 0.0
-        if val_directional_accuracy < _TARGET_DIRECTIONAL_ACC:
-            penalty += (_TARGET_DIRECTIONAL_ACC - val_directional_accuracy) * 24.0
+        if avg_dir_acc < _TARGET_DIRECTIONAL_ACC:
+            penalty += (_TARGET_DIRECTIONAL_ACC - avg_dir_acc) * 12.0 # Reduced from 24.0 due to strict CV
 
-        # Apply PBO via Sharpe (tandem), not as a separate global objective term.
-        if effective_sharpe < _TARGET_SHARPE_MIN:
-            penalty += (_TARGET_SHARPE_MIN - effective_sharpe) * 0.30
+        if deflated_sharpe < _TARGET_SHARPE_MIN:
+            penalty += (_TARGET_SHARPE_MIN - deflated_sharpe) * 0.30
         else:
-            sharpe_bonus = min(effective_sharpe, _TARGET_SHARPE_STRETCH) - _TARGET_SHARPE_MIN
+            sharpe_bonus = min(deflated_sharpe, _TARGET_SHARPE_STRETCH) - _TARGET_SHARPE_MIN
             penalty -= sharpe_bonus * 0.10
 
         meets_target = bool(
-            effective_sharpe >= _TARGET_SHARPE_MIN
-            and val_directional_accuracy > (_TARGET_DIRECTIONAL_ACC + _TARGET_DIRECTIONAL_ACC_STRICT_EPS)
+            deflated_sharpe >= _TARGET_SHARPE_MIN
+            and avg_dir_acc > (_TARGET_DIRECTIONAL_ACC + _TARGET_DIRECTIONAL_ACC_STRICT_EPS)
         )
-        base_objective_score = best_val_loss + penalty
+        base_objective_score = avg_val_loss + penalty
+        
         plateau = compute_plateau_penalty(
             study=trial.study,
             current_params=trial.params,
@@ -611,16 +613,22 @@ def run_optuna(
             cliff_weight=_PLATEAU_CLIFF_WEIGHT,
             spread_weight=_PLATEAU_SPREAD_WEIGHT,
         )
+        
+        # Hard Plateau Rejection
+        if int(plateau["neighbor_count"]) >= _PLATEAU_MAX_NEIGHBORS and float(plateau["local_iqr"]) < 0.01:
+            raise optuna.TrialPruned("Trial pruned due to strict plateau trapping - forcing exploration.")
+            
         objective_score = base_objective_score + float(plateau["penalty"])
 
-        trial.set_user_attr("best_val_loss", best_val_loss)
-        trial.set_user_attr("val_directional_accuracy", val_directional_accuracy)
-        trial.set_user_attr("cpcv_sharpe_mean", cpcv_sharpe_mean)
-        trial.set_user_attr("cpcv_pbo_proxy", cpcv_pbo_proxy)
-        trial.set_user_attr("effective_sharpe_for_objective", effective_sharpe)
-        trial.set_user_attr("pbo_sharpe_penalty", pbo_sharpe_penalty)
+        trial.set_user_attr("best_val_loss", avg_val_loss)
+        trial.set_user_attr("val_directional_accuracy", avg_dir_acc)
+        trial.set_user_attr("cpcv_sharpe_mean", percentile_5_sharpe)
+        trial.set_user_attr("cpcv_pbo_proxy", 0.0) # Disabled proxy in favor of Deflated Sharpe
+        trial.set_user_attr("effective_sharpe_for_objective", deflated_sharpe)
+        trial.set_user_attr("pbo_sharpe_penalty", 0.0)
         trial.set_user_attr("meets_target", meets_target)
-        trial.set_user_attr("best_epoch", int(metrics.get("best_epoch", -1)))
+        trial.set_user_attr("max_drawdown_ratio", worst_drawdown_ratio)
+        trial.set_user_attr("best_epoch", -1)
         trial.set_user_attr("base_objective_score", float(base_objective_score))
         trial.set_user_attr("plateau_penalty", float(plateau["penalty"]))
         trial.set_user_attr("plateau_neighbor_count", int(plateau["neighbor_count"]))
@@ -688,6 +696,9 @@ def run_optuna(
         ),
         "best_directional_accuracy": (
             float(study.best_trial.user_attrs.get("val_directional_accuracy", 0.0)) if complete_trials else None
+        ),
+        "best_max_drawdown_ratio": (
+            float(study.best_trial.user_attrs.get("max_drawdown_ratio", 0.0)) if complete_trials else None
         ),
         "best_meets_target": bool(study.best_trial.user_attrs.get("meets_target", False)) if complete_trials else False,
         "study_name": study.study_name,

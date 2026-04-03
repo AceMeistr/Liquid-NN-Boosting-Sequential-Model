@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import argparse
 import logging
@@ -23,6 +23,7 @@ from modelmk1.common.runtime import (
     write_json,
 )
 from modelmk1.data.loader import (
+    SplitBundle,
     TickDataset,
     build_supervised_data,
     load_tick_df,
@@ -119,20 +120,42 @@ def _evaluate(
     return float(total) / max(n_seen, 1), np.concatenate(preds), np.concatenate(targets)
 
 
+def _max_drawdown_ratio(returns: np.ndarray) -> float:
+    """Compute peak-to-trough drawdown as a fraction of equity."""
+    series = np.asarray(returns, dtype=np.float64).reshape(-1)
+    if series.size == 0:
+        return 0.0
+
+    equity = np.cumprod(1.0 + series)
+    peak = np.maximum.accumulate(equity)
+    drawdown = 1.0 - (equity / np.maximum(peak, 1e-12))
+    max_dd = float(np.max(drawdown)) if drawdown.size else 0.0
+    if not np.isfinite(max_dd):
+        return 1.0
+    return float(max(max_dd, 0.0))
+
+
 # ---------------------------------------------------------------------------
 # Main training function
 # ---------------------------------------------------------------------------
 
-def run_training(args: argparse.Namespace, on_epoch_end: EpochProgressCallback | None = None) -> dict:
+def run_training(
+    args: argparse.Namespace, 
+    on_epoch_end: EpochProgressCallback | None = None,
+    split_bundle: SplitBundle | None = None,
+) -> dict:
     set_seed(args.seed)
     device = pick_device(force_cpu=args.cpu)
 
-    dataset_path = resolve_data_file(args.data_path)
-    df = load_tick_df(str(dataset_path))
-    sampled = resample_ticks(df, freq=args.resample_freq)
-    bundle = build_supervised_data(sampled, seq_len=args.seq_len, horizon=args.horizon, include_stoch_rsi=True)
-
-    split = prepare_split(bundle, train_ratio=0.8)
+    if split_bundle is not None:
+        split = split_bundle
+        dataset_path = getattr(args, "data_path", "pre-computed-split")
+    else:
+        dataset_path = resolve_data_file(args.data_path)
+        df = load_tick_df(str(dataset_path))
+        sampled = resample_ticks(df, freq=args.resample_freq)
+        bundle = build_supervised_data(sampled, seq_len=args.seq_len, horizon=args.horizon, include_stoch_rsi=True)
+        split = prepare_split(bundle, train_ratio=0.8)
 
     train_loader = DataLoader(
         TickDataset(split.x_seq_train, split.y_train),
@@ -309,6 +332,7 @@ def run_training(args: argparse.Namespace, on_epoch_end: EpochProgressCallback |
         "val_mse": float(mean_squared_error(val_target, val_pred)),
         "val_mae": float(mean_absolute_error(val_target, val_pred)),
         "val_directional_accuracy": directional_accuracy(val_target, val_pred),
+        "max_drawdown_ratio": _max_drawdown_ratio(np.sign(val_pred) * val_target),
         "cpcv": cpcv_summary,
         "device": device.type,
         "dataset": str(dataset_path),

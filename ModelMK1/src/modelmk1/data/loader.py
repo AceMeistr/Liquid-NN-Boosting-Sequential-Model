@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from dataclasses import dataclass
 import logging
@@ -335,6 +335,53 @@ def walk_forward_splits(
 
         scaler = RobustScaler() if use_robust_scaler else StandardScaler()
         # Scale only on training fold to prevent data leakage
+        scaler.fit(x_seq_train.reshape(-1, x_seq_train.shape[-1]))
+
+        yield SplitBundle(
+            x_seq_train=scale_sequences(scaler, x_seq_train),
+            x_seq_val=scale_sequences(scaler, x_seq_val),
+            x_xgb_train=scaler.transform(x_xgb_train),
+            x_xgb_val=scaler.transform(x_xgb_val),
+            y_train=y_train,
+            y_val=y_val,
+            scaler=scaler,
+            feature_columns=bundle.feature_columns,
+        )
+
+
+def anchored_walk_forward_splits(
+    bundle: DataBundle,
+    min_train_bars: int = 40 * 375,
+    test_bars: int = 10 * 375,
+    n_splits: int = 5,
+    use_robust_scaler: bool = False,
+) -> Iterator[SplitBundle]:
+    """Yields anchored expanding train windows with rolling validation windows."""
+    total_samples = len(bundle.targets)
+    
+    available_for_test = total_samples - min_train_bars
+    if available_for_test < test_bars * n_splits:
+        test_bars = max(available_for_test // n_splits, 375)
+        
+    if min_train_bars + test_bars > total_samples:
+        yield prepare_split(bundle, train_ratio=0.8, use_robust_scaler=use_robust_scaler)
+        return
+
+    for i in range(n_splits):
+        train_end = min_train_bars + (i * test_bars)
+        test_end = min(train_end + test_bars, total_samples)
+        
+        if train_end >= total_samples or test_end == train_end:
+            break
+
+        x_seq_train = bundle.sequences[0:train_end]
+        x_seq_val = bundle.sequences[train_end:test_end]
+        x_xgb_train = bundle.xgb_features[0:train_end]
+        x_xgb_val = bundle.xgb_features[train_end:test_end]
+        y_train = bundle.targets[0:train_end]
+        y_val = bundle.targets[train_end:test_end]
+
+        scaler = RobustScaler() if use_robust_scaler else StandardScaler()
         scaler.fit(x_seq_train.reshape(-1, x_seq_train.shape[-1]))
 
         yield SplitBundle(
